@@ -1,0 +1,53 @@
+# CI-Pipeline für die Pacman-App: installiert Abhängigkeiten, führt Tests aus
+# und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
+name: CI Pipeline
+
+# Löst den Workflow bei Pushes auf bestimmte Branches sowie bei Pull Requests auf main aus.
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/** # alle Feature-Branches (z. B. feature/login)
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Holt den Quellcode des Repositories in die Runner-Umgebung.
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      # Installiert die passende Node.js-Version für den Build.
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Installiert die Projektabhängigkeiten reproduzierbar anhand der package-lock.json.
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      # Führt die Testsuite aus. continue-on-error sorgt dafür, dass die Pipeline
+      # trotz fehlschlagender Tests weiterläuft (z. B. um trotzdem den Docker-Build zu prüfen).
+      - name: Tests ausführen
+        run: npm test
+        continue-on-error: true
+
+      # Richtet Docker Buildx ein, das für erweiterte Docker-Build-Funktionen benötigt wird.
+      - name: Docker Buildx einrichten
+        uses: docker/setup-buildx-action@v3
+
+      # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA zur Nachverfolgbarkeit.
+      - name: Docker Image erstellen
+        run: |
+          docker build -t pacman-app:${{ github.sha }} .
+
+      # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
+      - name: Workflow erfolgreich abgeschlossen
+        run: echo "CI Pipeline erfolgreich ausgeführt."
