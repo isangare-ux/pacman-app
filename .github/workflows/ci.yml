@@ -2,6 +2,10 @@
 # und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
 name: CI Pipeline
 
+permissions:
+  contents: read
+  packages: write
+
 # Löst den Workflow bei Pushes auf bestimmte Branches sowie bei Pull Requests auf main aus.
 on:
   push:
@@ -53,3 +57,13 @@ jobs:
       # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
       - name: Workflow erfolgreich abgeschlossen
         run: echo "CI Pipeline erfolgreich ausgeführt."
+
+      - name: Login bei GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          # Authentifizierung an der GitHub Container Registry (GHCR)
+          # Benutzername: GitHub-Benutzer des Workflow-Auslösers
+          # Passwort: Automatisch von GitHub bereitgestelltes Zugriffstoken
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
