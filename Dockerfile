@@ -1,4 +1,5 @@
 #Sicherheitsmaßnahmen im Dockerfile verbessert. Nicht benötigte Berechtigungen reduziert und bewährte Sicherheitspraktiken umgesetzt
+#Docker-Container so angepasst, dass die Anwendung unter einem nicht privilegierten Benutzer ausgeführt wird.
 # Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
 FROM node:22-alpine
 
