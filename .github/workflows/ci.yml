@@ -34,6 +34,10 @@ jobs:
         with:
           node-version: "22"
 
+        # Prüft die installierte Node.js-Version.
+      - name: Anzeigen der Node-Version
+        run: node --version
+
       # Installiert die Projektabhängigkeiten reproduzierbar anhand der package-lock.json.
       - name: Abhängigkeiten installieren
         run: npm ci
