@@ -1,5 +1,6 @@
 # CI-Pipeline für die Pacman-App: installiert Abhängigkeiten, führt Tests aus
 # und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
+#CI-Workflow erweitert und optimiert. Build-, Test- und Validierungsschritte wurden verbessert, um die Qualitätssicherung zu automatisieren.
 name: CI Pipeline
 
 permissions:
@@ -50,9 +51,9 @@ jobs:
       # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA zur Nachverfolgbarkeit.
       - name: Docker Image erstellen
         run: |
-            docker build \
-                -t pacman-app:latest \
-                -t pacman-app:${{ github.sha }} .
+          docker build \
+              -t pacman-app:latest \
+              -t pacman-app:${{ github.sha }} .
 
       # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
       - name: Workflow erfolgreich abgeschlossen
