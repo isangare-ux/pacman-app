@@ -1,0 +1,1 @@
+#Smoke-Test ergänzt, um die Erreichbarkeit und grundlegende Funktionsfähigkeit der Anwendung automatisiert zu prüfen.
