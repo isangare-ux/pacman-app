@@ -1,4 +1,3 @@
-
 # Pacman-App
 
 ## Projektübersicht
@@ -16,6 +15,11 @@ Dieses Projekt modernisiert eine historische Pacman-Node.js-Anwendung durch den 
 - Deployment auf einem Kubernetes-Cluster
 - GitOps-basierte Verwaltung der Kubernetes-Ressourcen mit Argo CD
 - Grundlage für Monitoring mit Prometheus und Grafana
+
+
+## Projektstatus
+
+Dieses Projekt befindet sich in der aktiven Weiterentwicklung.
 
 ---
 
