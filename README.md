@@ -1,11 +1,10 @@
-
 # Pacman-App
 
 ## Projektübersicht
 
-Dieses Repository enthält die modernisierte Pacman-Anwendung auf Basis von Node.js und Express sowie die Konfiguration für die Continuous-Integration-Pipeline.
-
-Die Anwendung wird containerisiert mit Docker bereitgestellt und anschließend über GitHub Container Registry (GHCR), Kubernetes und Argo CD automatisiert ausgeliefert.
+Dieses Projekt modernisiert eine historische Pacman-Node.js-Anwendung
+durch Einsatz moderner DevOps-Praktiken mit Docker, GitHub Actions,
+GHCR, Kubernetes und GitOps.
 
 ---
 
