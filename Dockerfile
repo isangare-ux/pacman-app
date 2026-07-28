@@ -4,6 +4,8 @@
 # Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
 FROM node:22-alpine
 
+LABEL maintainer="Ibrahim Sangaré"
+
 # Legt das Arbeitsverzeichnis innerhalb des Containers fest.
 WORKDIR /usr/src/app
 
