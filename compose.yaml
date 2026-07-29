@@ -1,0 +1,115 @@
+# Docker Compose Konfiguration für die Pacman-Anwendung
+# Startet die Webanwendung und die MongoDB-Datenbank
+# einschließlich Netzwerk, persistentem Speicher und Healthchecks.
+
+#version: "3.9"
+
+services:
+
+  # -----------------------------------------
+  # Pacman-Webanwendung
+  # -----------------------------------------
+  pacman:
+
+    # Eindeutiger Name des Containers
+    container_name: pacman
+
+    # Erstellt das Docker-Image aus dem lokalen Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Name und Version des erzeugten Images
+    image: pacman-app:v1.0
+
+    # Veröffentlichung des HTTP-Ports der Anwendung
+    ports:
+      - "8080:8080"
+
+    # Container wird nach einem Neustart automatisch gestartet
+    restart: unless-stopped
+
+    # Startreihenfolge:
+    # MongoDB wird vor der Anwendung gestartet.
+    # Hinweis: depends_on ersetzt keinen Healthcheck.
+    depends_on:
+      - mongodb
+
+    # Übergabe der MongoDB-Konfiguration an die Anwendung
+    environment:
+      PORT: ${PORT}
+      MONGO_SERVICE_HOST: ${MONGO_SERVICE_HOST}
+      MONGO_DATABASE: ${MONGO_DATABASE}
+      MY_MONGO_PORT: ${MY_MONGO_PORT}
+
+    # Verbindung zum gemeinsamen Docker-Netzwerk
+    networks:
+      - pacman-network
+
+    # Überprüfung, ob die Webanwendung erreichbar ist
+    healthcheck:
+      # Sendet einen HTTP-Request an die Anwendung; schlägt fehl, wenn keine Antwort kommt
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      # Zeitabstand zwischen zwei Healthcheck-Durchläufen
+      interval: 30s
+      # Maximale Wartezeit auf eine Antwort, bevor der Check als fehlgeschlagen gilt
+      timeout: 10s
+      # Anzahl aufeinanderfolgender Fehlversuche, bis der Container als "unhealthy" markiert wird
+      retries: 5
+      # Anlaufzeit nach dem Start, in der Fehlversuche nicht gezählt werden
+      start_period: 30s
+
+  # -----------------------------------------
+  # MongoDB-Datenbank
+  # -----------------------------------------
+  mongodb:
+
+    # Eindeutiger Name des Containers
+    container_name: mongodb
+
+    # Verwendung der geforderten MongoDB-Version
+    image: mongo:4.4.30-focal
+
+    # Automatischer Neustart bei Fehlern oder Systemneustart
+    restart: unless-stopped
+
+    # MongoDB wird nur innerhalb des Docker-Netzwerks bereitgestellt.
+    # Der Port wird nicht auf dem Host veröffentlicht.
+    expose:
+      - "27017"
+
+    # Persistente Speicherung der Datenbankdaten
+    volumes:
+      - mongodb-data:/data/db
+
+    # Verbindung zum gemeinsamen Docker-Netzwerk
+    networks:
+      - pacman-network
+
+    # Prüft, ob die Datenbank betriebsbereit ist
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+# -----------------------------------------
+# Persistentes Daten-Volume
+# -----------------------------------------
+# Speichert die MongoDB-Daten dauerhaft.
+# Die Daten bleiben auch nach einem Neustart
+# oder einer Neuerstellung der Container erhalten.
+volumes:
+  mongodb-data:
+    name: mongodb-data
+
+# -----------------------------------------
+# Gemeinsames Docker-Netzwerk
+# -----------------------------------------
+# Ermöglicht die Kommunikation zwischen
+# Pacman-Anwendung und MongoDB über ihre Servicenamen.
+networks:
+  pacman-network:
+    # Standard-Netzwerktreiber für Docker Compose auf einem einzelnen Host
+    driver: bridge

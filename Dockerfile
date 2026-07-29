@@ -1,33 +1,31 @@
-# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte Sicherheitspraktiken umgesetzt.
-# Die Anwendung wird als nicht privilegierter Benutzer ausgeführt, um das Sicherheitsrisiko zu reduzieren.
+# Basis-Image: Node 16 auf schlankem Debian Bullseye für eine kleine Image-Größe
+FROM node:16.19.0-bullseye-slim
 
-# Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
-FROM node:16.19.0-bullseye-slim 
-
-# Setzt Metadaten für das Image (hier: verantwortliche Person), sichtbar über "docker inspect".
 LABEL maintainer="Ibrahim Sangaré"
 
-# Legt das Arbeitsverzeichnis innerhalb des Containers fest.
+# Installation von curl für den Healthcheck
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
+# Arbeitsverzeichnis im Container festlegen
 WORKDIR /usr/src/app
 
-# Kopiert package.json und package-lock.json in das Arbeitsverzeichnis.
-# Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern (Layer-Cache).
+# Nur die package-Dateien kopieren, um den Docker-Layer-Cache
+# bei unveränderten Abhängigkeiten optimal zu nutzen
 COPY package*.json ./
 
-# Installiert ausschließlich die produktiven Abhängigkeiten.
-# Entwicklungsabhängigkeiten werden nicht in das Image übernommen.
-# npm ci sorgt für einen reproduzierbaren Build anhand der package-lock.json.
+# Produktionsabhängigkeiten reproduzierbar installieren (ohne devDependencies)
 RUN npm ci --omit=dev
 
-# Kopiert den vollständigen Anwendungscode in den Container.
+# Restlichen Anwendungscode in den Container kopieren
 COPY . .
 
-# Führt die Anwendung als Benutzer "node" aus,
-# um die Sicherheit des Containers zu erhöhen.
+# Auf einen nicht-privilegierten Benutzer wechseln (Security Best Practice)
 USER node
 
-# Dokumentiert den von der Anwendung verwendeten Port.
+# Port, auf dem die Anwendung im Container lauscht
 EXPOSE 8080
 
-# Startet die Anwendung über das in package.json definierte Startskript.
+# Startbefehl des Containers
 CMD ["npm", "start"]
