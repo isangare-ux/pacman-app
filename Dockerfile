@@ -2,8 +2,9 @@
 # Die Anwendung wird als nicht privilegierter Benutzer ausgeführt, um das Sicherheitsrisiko zu reduzieren.
 
 # Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
-FROM node:22-alpine
+FROM node:16.19.0-bullseye-slim 
 
+# Setzt Metadaten für das Image (hier: verantwortliche Person), sichtbar über "docker inspect".
 LABEL maintainer="Ibrahim Sangaré"
 
 # Legt das Arbeitsverzeichnis innerhalb des Containers fest.
