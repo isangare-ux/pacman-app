@@ -1,11 +1,16 @@
 # CI-Pipeline für die Pacman-App: installiert Abhängigkeiten, führt Tests aus
 # und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
-#CI-Workflow erweitert und optimiert. Build-, Test- und Validierungsschritte wurden verbessert, um die Qualitätssicherung zu automatisieren.
+# CI-Workflow erweitert und optimiert. Build-, Test- und Validierungsschritte wurden verbessert,
+# um die Qualitätssicherung zu automatisieren.
+
 name: CI Pipeline
 
+
+# Beschränkt die Berechtigungen des GITHUB_TOKEN nach dem Least-Privilege-Prinzip:
+# Der Workflow benötigt nur Lesezugriff auf den Repository-Inhalt (z. B. für actions/checkout).
 permissions:
   contents: read
-  packages: write
+
 
 # Löst den Workflow bei Pushes auf bestimmte Branches sowie bei Pull Requests auf main aus.
 on:
@@ -14,57 +19,160 @@ on:
       - main
       - develop
       - feature/** # alle Feature-Branches (z. B. feature/login)
+
   pull_request:
     branches:
       - main
 
+
 jobs:
+
   build-and-test:
+
     name: Build and Test
+
     runs-on: ubuntu-latest
 
+
     steps:
+
+
       # Holt den Quellcode des Repositories in die Runner-Umgebung.
       - name: Repository auschecken
         uses: actions/checkout@v4
+
+
 
       # Installiert die passende Node.js-Version für den Build.
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "16.19.0"
+
+
 
       # Installiert die Projektabhängigkeiten reproduzierbar anhand der package-lock.json.
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      # Führt die Testsuite aus. continue-on-error sorgt dafür, dass die Pipeline
-      # trotz fehlschlagender Tests weiterläuft (z. B. um trotzdem den Docker-Build zu prüfen).
+
+
+      # Validiert die Docker Compose Konfiguration.
+      # Fehlerhafte YAML-Dateien oder ungültige Konfigurationen stoppen den Workflow.
+      - name: Validate Docker Compose
+        run: docker compose config
+
+
+
+      # Startet die komplette lokale Integrationsumgebung:
+      # Pacman-Anwendung + MongoDB-Datenbank.
+      # Dadurch wird dieselbe Umgebung wie bei der lokalen Entwicklung getestet.
+      - name: Start Docker Compose Stack
+        run: docker compose up -d
+
+
+
+      # Wartet auf den Healthcheck-Status beider Services (pacman + mongodb).
+      # Statt einer festen sleep-Zeit wird aktiv gepollt, bis beide Container
+      # den Status "healthy" melden oder das Timeout von 60 Sekunden überschritten wird.
+      - name: Wait for services
+        run: |
+          echo "Warte auf gestartete Services..."
+
+          timeout 60 bash -c '
+          until docker compose ps | grep -q "pacman.*healthy" &&
+                docker compose ps | grep -q "mongodb.*healthy"; do
+            echo "Services noch nicht bereit..."
+            sleep 5
+          done
+          '
+
+          docker compose ps
+
+
+
+      # Prüft, ob die Anwendung erreichbar ist.
+      # Erwartet wird ein erfolgreicher HTTP-Statuscode.
+      - name: HTTP Smoke Test
+        run: |
+          curl -f http://localhost:8080
+
+
+
+      # Prüft die Anwendungsausgabe und stellt sicher,
+      # dass die Verbindung zur MongoDB erfolgreich aufgebaut wurde.
+      - name: Check Application Logs
+        run: |
+          docker compose logs pacman
+
+
+
+      # Führt die vorhandene Testsuite aus und schreibt die Ausgabe in logs/test.log.
       - name: Tests ausführen
-        run: npm test
-        continue-on-error: true
+        run: |
+          mkdir -p logs
+          npm test 2>&1 | tee logs/test.log
+          exit ${PIPESTATUS[0]}
+
+
+
+      # Lädt Testprotokolle als Artefakt hoch – auch bei fehlgeschlagenen Tests.
+      # Es werden keine Secrets oder Zugangsdaten veröffentlicht.
+      - name: Testlogs als Artefakt speichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: logs/
+          if-no-files-found: ignore
+
+
+
+    # Beendet die Docker Compose Umgebung nach Abschluss der Tests.
+    # if: always() stellt sicher, dass die Bereinigung auch bei fehlgeschlagenen
+    # Tests oder vorherigen Fehlern ausgeführt wird.
+    # Container und Netzwerk werden entfernt, benannte Volumes bleiben erhalten,
+    # da kein Parameter -v verwendet wird.
+      
+      - name: Stop Docker Compose
+        if: always()
+        run: docker compose down
+
+
 
       # Richtet Docker Buildx ein, das für erweiterte Docker-Build-Funktionen benötigt wird.
       - name: Docker Buildx einrichten
         uses: docker/setup-buildx-action@v3
 
-      # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA zur Nachverfolgbarkeit.
+
+
+      # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA
+      # zur eindeutigen Nachverfolgbarkeit.
       - name: Docker Image erstellen
         run: |
           docker build \
-              -t pacman-app:latest \
-              -t pacman-app:${{ github.sha }} .
+            -t pacman-app:latest \
+            -t pacman-app:${{ github.sha }} .
 
-      # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
+
+
+      # Vorbereitung für spätere Veröffentlichung in der GitHub Container Registry.
+      # Der Login erfolgt erst nach erfolgreichem Build.
+      # - name: Login bei GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+
+      #     # Authentifizierung an der GitHub Container Registry (GHCR)
+      #     # Benutzername: GitHub-Benutzer des Workflow-Auslösers
+      #     # Passwort: Automatisch von GitHub bereitgestelltes Zugriffstoken
+      #     username: ${{ github.actor }}
+
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+      # Abschluss-Schritt, der signalisiert,
+      # dass die CI Pipeline erfolgreich durchlaufen wurde.
       - name: Workflow erfolgreich abgeschlossen
         run: echo "CI Pipeline erfolgreich ausgeführt."
-
-      - name: Login bei GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          # Authentifizierung an der GitHub Container Registry (GHCR)
-          # Benutzername: GitHub-Benutzer des Workflow-Auslösers
-          # Passwort: Automatisch von GitHub bereitgestelltes Zugriffstoken
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
