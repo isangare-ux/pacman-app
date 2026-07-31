@@ -1,5 +1,7 @@
-#Smoke-Test ergänzt, um die Erreichbarkeit und grundlegende Funktionsfähigkeit der Anwendung automatisiert zu prüfen.
 #!/bin/bash
+# Smoke-Test: Prüft, ob die Anwendung unter http://localhost:8080 erreichbar ist.
+# Wird nach dem Start des Containers ausgeführt, um die grundlegende
+# Funktionsfähigkeit sicherzustellen (kein 4xx/5xx-Fehler, kein Connection-Refused).
 
 curl -f http://localhost:8080
 
