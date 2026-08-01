@@ -51,9 +51,10 @@ coverage/
 # Skripte
 ##################################################
 
-# Hilfs- und Entwicklungsskripte werden nicht
-# im Container benötigt.
-scripts/
+# Temporäre Skripte oder lokale Hilfsdateien
+# können ausgeschlossen werden.
+scripts/*.tmp
+scripts/*.log
 
 ##################################################
 # Umgebungsvariablen
