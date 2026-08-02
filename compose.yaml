@@ -3,8 +3,8 @@ services:
     build: .
     image: pacman-app:v1.0
     ports:
-      #- "8080:8080"
-       - "8080:8090"
+      - "8080:8080"
+      # - "8080:8090"
 
     environment:
       - MONGO_SERVICE_HOST=mongodb
