@@ -4,8 +4,26 @@ services:
     ports:
       - "8080:8080"
 
+    environment:
+      - MONGO_SERVICE_HOST=mongodb
+
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 30s
+      # node:22-alpine enthält kein curl, aber wget (Teil von BusyBox).
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080"]
+      interval: 10s
       timeout: 10s
       retries: 3
+
+  mongodb:
+    image: mongo:4.4.30-focal
+    container_name: mongodb
+
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

@@ -46,8 +46,8 @@ echo "Warte auf gestartete Services..."
 # Healthcheck-Status "healthy" melden. Bricht nach 60 Sekunden ab,
 # falls ein Service nicht rechtzeitig gesund wird.
 timeout 60 bash -c '
-until docker compose ps | grep -q "pacman.*healthy" &&
-      docker compose ps | grep -q "mongodb.*healthy"; do
+until docker compose ps | grep -q "pacman.*(healthy)" &&
+      docker compose ps | grep -q "mongodb.*(healthy)"; do
 
     echo "Services noch nicht bereit..."
     sleep 5

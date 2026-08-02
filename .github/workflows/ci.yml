@@ -125,8 +125,8 @@ jobs:
           echo "Warte auf gestartete Services..."
 
           timeout 60 bash -c '
-          until docker compose ps | grep -q "pacman.*healthy" &&
-                docker compose ps | grep -q "mongodb.*healthy"; do
+          until docker compose ps | grep -q "pacman.*(healthy)" &&
+                docker compose ps | grep -q "mongodb.*(healthy)"; do
 
             echo "Services noch nicht bereit..."
             sleep 5
