@@ -3,7 +3,8 @@ services:
     build: .
     image: pacman-app:v1.0
     ports:
-      - "8080:8080"
+      #- "8080:8080"
+       - "8080:8090"
 
     environment:
       - MONGO_SERVICE_HOST=mongodb
@@ -20,8 +21,8 @@ services:
       retries: 3
 
   mongodb:
-    # image: mongo:4.4.30-focal
-    image: mongo:999.999
+    image: mongo:4.4.30-focal
+    #image: mongo:999.999
     container_name: mongodb
 
     healthcheck:
