@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node .",
     "dev": "nodemon .",
-    "_test": "echo 'tests are working'",
-    "test": "exit 1"
+    "_test": "exit 1'",
+    "test": "echo 'tests are working"
   },
   "license": "GPLv3",
   "dependencies": {
