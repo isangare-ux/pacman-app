@@ -1,74 +1,234 @@
-# CI-Pipeline für die Pacman-App: installiert Abhängigkeiten, führt Tests aus
-# und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
-#CI-Workflow erweitert und optimiert. Build-, Test- und Validierungsschritte wurden verbessert, um die Qualitätssicherung zu automatisieren.
+# ==========================================================
+# CI-Pipeline für die Pacman-App
+#
+# Ablauf:
+# 1. Repository auschecken
+# 2. Node.js Umgebung vorbereiten inklusive npm Cache
+# 3. Abhängigkeiten installieren
+# 4. Docker Compose validieren
+# 5. Docker Compose Integrationsumgebung starten
+# 6. Healthcheck der Services prüfen
+# 7. Smoke-Test durchführen (tests/smoke-test.sh)
+# 8. Anwendungstests ausführen
+# 9. Testlogs speichern
+# 10. Umgebung bereinigen (scripts/local-stop.sh)
+# 11. Docker Image bauen
+# 12. Image nach GHCR veröffentlichen
+#
+# Hinweis:
+# Die CI-Pipeline startet die Docker-Compose-Umgebung.
+# Der Smoke-Test prüft anschließend die laufende Anwendung
+# und validiert die MongoDB-Kommunikation.
+# ==========================================================
+
+
 name: CI Pipeline
 
+
+# Least-Privilege-Prinzip:
+# Repository lesen und Docker Images in GHCR veröffentlichen
 permissions:
   contents: read
   packages: write
 
-# Löst den Workflow bei Pushes auf bestimmte Branches sowie bei Pull Requests auf main aus.
+
+
 on:
   push:
     branches:
       - main
       - develop
-      - feature/** # alle Feature-Branches (z. B. feature/login)
+      - feature/**
+
   pull_request:
     branches:
       - main
 
+
+
 jobs:
-  build-and-test:
+
+  build-test:
+
     name: Build and Test
     runs-on: ubuntu-latest
 
+
     steps:
-      # Holt den Quellcode des Repositories in die Runner-Umgebung.
+
+
+      # --------------------------------------------------
+      # 1. Repository auschecken
+      # --------------------------------------------------
       - name: Repository auschecken
         uses: actions/checkout@v4
 
-      # Installiert die passende Node.js-Version für den Build.
+
+
+      # --------------------------------------------------
+      # 2. Node.js Umgebung vorbereiten
+      # --------------------------------------------------
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "16.19.0"
+          cache: npm
 
-        # Prüft die installierte Node.js-Version.
-      - name: Anzeigen der Node-Version
+
+
+      - name: Node Version prüfen
         run: node --version
 
-      # Installiert die Projektabhängigkeiten reproduzierbar anhand der package-lock.json.
+
+
+      # --------------------------------------------------
+      # 3. Abhängigkeiten installieren
+      # --------------------------------------------------
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      # Führt die Testsuite aus. continue-on-error sorgt dafür, dass die Pipeline
-      # trotz fehlschlagender Tests weiterläuft (z. B. um trotzdem den Docker-Build zu prüfen).
+
+
+      # --------------------------------------------------
+      # 4. Docker Compose validieren
+      # --------------------------------------------------
+      # Prüft YAML-Struktur und aufgelöste Konfiguration.
+      - name: Docker Compose validieren
+        run: docker compose config
+
+
+
+      # --------------------------------------------------
+      # 5. Docker Compose Umgebung starten
+      # --------------------------------------------------
+      # NEU AP13:
+      # Startet die Integrationsumgebung innerhalb der CI.
+      #
+      # Services:
+      # - Pacman Anwendung
+      # - MongoDB Datenbank
+      - name: Docker Compose Stack starten
+        run: docker compose up -d
+
+
+
+      # --------------------------------------------------
+      # 6. Healthcheck Status prüfen
+      # --------------------------------------------------
+      # NEU AP13:
+      # Wartet aktiv auf den erfolgreichen Start der Services.
+      #
+      # Eine feste Wartezeit wird vermieden.
+      # Die Pipeline wartet maximal 60 Sekunden.
+      - name: Auf Services warten
+        run: |
+          echo "Warte auf gestartete Services..."
+
+          timeout 60 bash -c '
+          until docker compose ps | grep -q "pacman.*healthy" &&
+                docker compose ps | grep -q "mongodb.*healthy"; do
+
+            echo "Services noch nicht bereit..."
+            sleep 5
+
+          done
+          '
+
+          docker compose ps
+
+
+
+      # --------------------------------------------------
+      # 7. Smoke-Test durchführen
+      # --------------------------------------------------
+      # Prüft die laufende Integrationsumgebung:
+      #
+      # - HTTP-Erreichbarkeit
+      # - MongoDB Schreibprüfung
+      # - MongoDB Leseprüfung
+      #
+      # Der Start der Container erfolgt bereits oben.
+      - name: Smoke Test durchführen
+        run: ./tests/smoke-test.sh
+
+
+
+      # --------------------------------------------------
+      # 8. Anwendungstests
+      # --------------------------------------------------
       - name: Tests ausführen
-        run: npm test
-        continue-on-error: true
+        run: |
+          mkdir -p logs
 
-      # Richtet Docker Buildx ein, das für erweiterte Docker-Build-Funktionen benötigt wird.
-      - name: Docker Buildx einrichten
-        uses: docker/setup-buildx-action@v3
+          npm test 2>&1 | tee logs/test.log
 
-      # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA zur Nachverfolgbarkeit.
+          # Übergibt den ursprünglichen Exit-Code von npm test.
+          exit ${PIPESTATUS[0]}
+
+
+
+      # --------------------------------------------------
+      # 9. Testlogs als Artefakt speichern
+      # --------------------------------------------------
+      - name: Testlogs speichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: logs/
+          if-no-files-found: ignore
+
+
+
+      # --------------------------------------------------
+      # 10. Docker Compose Umgebung stoppen
+      # --------------------------------------------------
+      # always():
+      # Cleanup erfolgt auch bei fehlgeschlagenen Tests.
+      - name: Docker Compose stoppen
+        if: always()
+        run: ./scripts/local-stop.sh
+
+
+
+      # --------------------------------------------------
+      # 11. Docker Image bauen
+      # --------------------------------------------------
       - name: Docker Image erstellen
         run: |
           docker build \
-              -t pacman-app:latest \
-              -t pacman-app:${{ github.sha }} .
+            -t pacman-app:${{ github.sha }} \
+            -t pacman-app:latest .
 
-      # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
-      - name: Workflow erfolgreich abgeschlossen
-        run: echo "CI Pipeline erfolgreich ausgeführt."
 
+
+      # --------------------------------------------------
+      # 12. GHCR Login
+      # --------------------------------------------------
       - name: Login bei GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # Authentifizierung an der GitHub Container Registry (GHCR)
-          # Benutzername: GitHub-Benutzer des Workflow-Auslösers
-          # Passwort: Automatisch von GitHub bereitgestelltes Zugriffstoken
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+      # --------------------------------------------------
+      # 13. Docker Image veröffentlichen
+      # --------------------------------------------------
+      - name: Image nach GHCR pushen
+        run: |
+          docker tag pacman-app:${{ github.sha }} \
+          ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
+
+          docker push \
+          ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
+
+
+
+      # --------------------------------------------------
+      # Abschluss
+      # --------------------------------------------------
+      - name: CI erfolgreich abgeschlossen
+        run: echo "CI Pipeline erfolgreich ausgeführt."
