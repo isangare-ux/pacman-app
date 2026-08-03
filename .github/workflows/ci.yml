@@ -133,7 +133,10 @@ jobs:
       # --------------------------------------------------
       - name: Tests ausführen
         env:
-          MONGO_URL: mongodb://mongodb:27017
+          # localhost:27017 funktioniert, weil compose.yaml Port 27017 auf den Host freigibt.
+          # Der Hostname "mongodb" wäre nur innerhalb des Docker-Netzwerks erreichbar,
+          # aber npm test läuft auf dem Host-Runner, nicht im Container.
+          MONGO_URL: mongodb://localhost:27017
         run: |
           # Erstellt ein Verzeichnis für Testprotokolle.
           # Die Logs werden anschließend als GitHub Actions Artifact gespeichert.
