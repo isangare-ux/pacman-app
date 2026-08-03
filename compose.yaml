@@ -25,6 +25,11 @@ services:
     #image: mongo:999.999
     container_name: mongodb
 
+    # Port 27017 wird auf den Host freigegeben, damit npm test
+    # (läuft auf dem Host, nicht im Container) MongoDB erreichen kann.
+    ports:
+      - "27017:27017"
+
     healthcheck:
       test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
       interval: 5s

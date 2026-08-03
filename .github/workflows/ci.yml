@@ -7,13 +7,12 @@
 # 3. Abhängigkeiten installieren
 # 4. Docker Compose validieren
 # 5. Docker Compose Integrationsumgebung starten
-# 6. Healthcheck der Services prüfen
-# 7. Smoke-Test durchführen (tests/smoke-test.sh)
-# 8. Anwendungstests ausführen
-# 9. Testlogs speichern
-# 10. Umgebung bereinigen (scripts/local-stop.sh)
-# 11. Docker Image bauen
-# 12. Image nach GHCR veröffentlichen
+# 6. Smoke-Test durchführen (tests/smoke-test.sh)
+# 7. Anwendungstests ausführen
+# 8. Testlogs speichern
+# 9. Umgebung bereinigen (scripts/local-stop.sh)
+# 10. Docker Image bauen
+# 11. Image nach GHCR veröffentlichen
 #
 # Hinweis:
 # Die CI-Pipeline startet die Docker-Compose-Umgebung.
@@ -113,33 +112,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 6. Healthcheck Status prüfen
-      # --------------------------------------------------
-      # NEU AP13:
-      # Wartet aktiv auf den erfolgreichen Start der Services.
-      #
-      # Eine feste Wartezeit wird vermieden.
-      # Die Pipeline wartet maximal 60 Sekunden.
-      - name: Auf Services warten
-        run: |
-          echo "Warte auf gestartete Services..."
-
-          timeout 60 bash -c '
-          until docker compose ps | grep -q "pacman.*(healthy)" &&
-                docker compose ps | grep -q "mongodb.*(healthy)"; do
-
-            echo "Services noch nicht bereit..."
-            sleep 5
-
-          done
-          '
-
-          docker compose ps
-
-
-
-      # --------------------------------------------------
-      # 7. Smoke-Test durchführen
+      # 6. Smoke-Test durchführen
       # --------------------------------------------------
       # Prüft die laufende Integrationsumgebung:
       #
@@ -154,23 +127,56 @@ jobs:
 
 
       # --------------------------------------------------
-      # 8. Anwendungstests
+      # 7. Anwendungstests
       # --------------------------------------------------
       - name: Tests ausführen
+        env:
+          MONGO_URL: mongodb://mongodb:27017
         run: |
+          # Erstellt ein Verzeichnis für Testprotokolle.
+          # Die Logs werden anschließend als GitHub Actions Artifact gespeichert.
           mkdir -p logs
 
-          npm test 2>&1 | tee logs/test.log
+          # Führt die automatisierten Jest-Tests aus.
+          #
+          # Ausgeführt werden:
+          # - tests/app.test.js       → Prüfung der HTTP-Erreichbarkeit der Anwendung
+          # - tests/mongodb.test.js   → Prüfung der MongoDB-Verbindung
+          #
+          # 2>&1:
+          # - leitet die Standardfehlerausgabe (stderr)
+          #   in die Standardausgabe (stdout) um.
+          # - dadurch werden normale Ausgaben und Fehlermeldungen
+          #   gemeinsam im Log gespeichert.
+          #
+          # | tee logs/test.log:
+          # - schreibt die komplette Testausgabe in die Datei test.log.
+          # - gleichzeitig bleibt die Ausgabe im GitHub Actions Terminal sichtbar.
+          npm test -- tests/basic.test.js tests/app.test.js tests/mongodb.test.js 2>&1 | tee logs/test.log
 
-          # Übergibt den ursprünglichen Exit-Code von npm test.
+          # PIPESTATUS[0]:
+          # - enthält den ursprünglichen Exit-Code des npm test Befehls.
+          #
+          # Problem ohne diese Zeile:
+          # Durch "tee" würde der Exit-Code von tee übernommen werden.
+          # Auch bei fehlgeschlagenen Tests könnte die Pipeline erfolgreich erscheinen.
+          #
+          # Exit-Code:
+          # 0 = Tests erfolgreich
+          # != 0 = Testfehler → CI Pipeline schlägt fehl
           exit ${PIPESTATUS[0]}
 
 
 
       # --------------------------------------------------
-      # 9. Testlogs als Artefakt speichern
+      # 8. Testlogs als Artefakt speichern
       # --------------------------------------------------
       - name: Testlogs speichern
+        # if: always() stellt sicher, dass die Testlogs auch dann gespeichert
+        # werden, wenn ein vorheriger Schritt fehlgeschlagen ist.
+        # Ohne diese Zeile würde GitHub Actions den Schritt überspringen,
+        # sobald z.B. die Tests fehlschlagen — die Logs wären dann verloren
+        # und eine Fehleranalyse wäre nicht möglich.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -181,18 +187,20 @@ jobs:
 
 
       # --------------------------------------------------
-      # 10. Docker Compose Umgebung stoppen
+      # 9. Docker Compose Umgebung stoppen
       # --------------------------------------------------
-      # always():
-      # Cleanup erfolgt auch bei fehlgeschlagenen Tests.
       - name: Docker Compose stoppen
+        # if: always() stellt sicher, dass die Docker Compose Umgebung auch dann
+        # gestoppt und bereinigt wird, wenn ein vorheriger Schritt fehlgeschlagen ist.
+        # Ohne diese Zeile würden Container nach einem Fehler weiterlaufen
+        # und Ressourcen im GitHub Actions Runner belegen.
         if: always()
         run: ./scripts/local-stop.sh
 
 
 
       # --------------------------------------------------
-      # 11. Docker Image bauen
+      # 10. Docker Image bauen
       # --------------------------------------------------
       - name: Docker Image erstellen
         run: |
@@ -203,7 +211,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 12. GHCR Login
+      # 11. GHCR Login
       # --------------------------------------------------
       - name: Login bei GHCR
         uses: docker/login-action@v3
@@ -215,7 +223,7 @@ jobs:
 
 
       # --------------------------------------------------
-      # 13. Docker Image veröffentlichen
+      # 12. Docker Image veröffentlichen
       # --------------------------------------------------
       - name: Image nach GHCR pushen
         run: |

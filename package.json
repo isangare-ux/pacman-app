@@ -8,7 +8,7 @@
     "start": "node .",
     "dev": "nodemon .",
     "_test": "exit 1'",
-    "test": "echo tests are working"
+    "test": "jest"
   },
   "license": "GPLv3",
   "dependencies": {
