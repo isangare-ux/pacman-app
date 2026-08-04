@@ -7,7 +7,11 @@ permissions:
   contents: read
   packages: write
 
-# Löst den Workflow bei Pushes auf bestimmte Branches sowie bei Pull Requests auf main aus.
+# Löst den Workflow bei Pushes auf main/develop/feature/** sowie bei Pull Requests auf main aus.
+#
+# Hinweis: Ein Push auf einen Feature-Branch mit bereits offenem PR nach main
+# löst den Workflow dadurch zweimal aus (push + pull_request synchronize
+# für denselben Commit).
 on:
   push:
     branches:
