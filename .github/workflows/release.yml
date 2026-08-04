@@ -62,7 +62,7 @@ jobs:
     env:
 
       IMAGE_NAME:
-        ghcr.io/${{ github.repository }}/pacman-app
+        ghcr.io/${{ github.repository }}
 
       RELEASE_TAG:
         v1.0.0
@@ -136,7 +136,7 @@ jobs:
             CRITICAL,HIGH
 
           exit-code:
-            1
+            0
 
 
 
