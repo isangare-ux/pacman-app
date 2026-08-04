@@ -21,6 +21,8 @@ on:
   pull_request:
     branches:
       - main
+  paths-ignore:
+    - ".github/workflows/release.yml"
 
 jobs:
   build-and-test:
