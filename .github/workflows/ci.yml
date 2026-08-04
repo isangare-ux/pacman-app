@@ -233,6 +233,8 @@ jobs:
 
       # --------------------------------------------------
       # 12. Docker Image veröffentlichen
+      #     Nur der SHA-Tag wird gepusht, da er als einziger
+      #     Tag in Schritt 10 gebaut wurde (kein "latest").
       # --------------------------------------------------
       - name: Image nach GHCR pushen
         run: |

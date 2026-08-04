@@ -1,77 +1,248 @@
 name: Release
 
+
+# ----------------------------------------------------------
+# Berechtigungen nach Least-Privilege-Prinzip
+#
+# contents:
+#   Lesen des Repositorys
+#
+# packages:
+#   Veröffentlichung von Container Images nach GHCR
+# ----------------------------------------------------------
+
 permissions:
   contents: read
   packages: write
 
+
+
+# ----------------------------------------------------------
+# Workflow Trigger
+#
+# Release erfolgt nach erfolgreichem Push auf main.
+# Zusätzlich kann der Release manuell gestartet werden.
+# ----------------------------------------------------------
+
 on:
+
   push:
     branches:
       - main
+
   workflow_dispatch:
 
+
+
 jobs:
-  build-test:
-    name: Build and Test
+
+  release:
+
+
+    name: Build Security Scan and Release
+
     runs-on: ubuntu-latest
 
+
+
+    # ----------------------------------------------------------
+    # Zentrale Variablen für den Image-Namen und die Version.
+    #
+    # Dadurch steht "pacman-app" nur an dieser einen Stelle im
+    # Workflow — alle folgenden Steps verwenden $IMAGE_NAME statt
+    # den Pfad jedes Mal erneut auszuschreiben. Das verhindert
+    # Tippfehler und doppelte/abweichende Image-Namen.
+    #
+    # RELEASE_TAG wird bei einer neuen Version einfach hier
+    # angepasst, statt an mehreren Stellen im Workflow.
+    # ----------------------------------------------------------
+    env:
+
+      IMAGE_NAME:
+        ghcr.io/${{ github.repository }}/pacman-app
+
+      RELEASE_TAG:
+        v1.0.0
+
+
+
     steps:
+
+
+
       # --------------------------------------------------
-      # 1. Repository auschecken
+      # 1. Repository Checkout
       # --------------------------------------------------
+
       - name: Repository auschecken
+
         uses: actions/checkout@v4
+
+
+
+
 
       # --------------------------------------------------
       # 2. Docker Image bauen
-      #    Direkt mit dem vollen GHCR-Pfad taggen, damit Scan,
-      #    Login und Push alle denselben Tag referenzieren.
+      #
+      # Zwei Tags werden erzeugt:
+      #
+      # 1. Commit SHA
+      #    eindeutige technische Referenz
+      #
+      # 2. Release Tag
+      #    nachvollziehbare Version
       # --------------------------------------------------
+
       - name: Docker Image erstellen
+
         run: |
+
           docker build \
-            -t ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }} \
-            -t ghcr.io/${{ github.repository }}/pacman-app:v1.0.0 .
+            -t $IMAGE_NAME:${{ github.sha }} \
+            -t $IMAGE_NAME:$RELEASE_TAG .
+
+
+
+
 
       # --------------------------------------------------
-      # 3. Security Scan VOR dem Push
-      #    Trivy scannt das lokal gebaute Image im Docker-Daemon.
-      #    exit-code: 1 lässt den Job bei CRITICAL/HIGH fehlschlagen,
-      #    sodass ein verwundbares Image NICHT in die Registry gelangt.
+      # 3. Security Scan mit Trivy
+      #
+      # Scan erfolgt VOR Veröffentlichung.
+      #
+      # Bei HIGH oder CRITICAL Findings
+      # wird die Pipeline abgebrochen.
       # --------------------------------------------------
+
       - name: Security Scan Docker Image
+
+
         uses: aquasecurity/trivy-action@master
+
+
         with:
-          image-ref: ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
-          format: table
-          exit-code: 1
-          severity: CRITICAL,HIGH
+
+          image-ref:
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+          format:
+            table
+
+          severity:
+            CRITICAL,HIGH
+
+          exit-code:
+            1
+
+
+
+
 
       # --------------------------------------------------
-      # 4. Login bei GHCR
-      #    Erst kurz vor dem Push, wird vorher nicht benötigt.
+      # 4. Login bei GitHub Container Registry
+      #
+      # GITHUB_TOKEN wird automatisch
+      # durch GitHub Actions bereitgestellt.
+      #
+      # Kein persönlicher Token erforderlich.
       # --------------------------------------------------
+
       - name: Login GHCR
+
+
         uses: docker/login-action@v3
+
+
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+
+          registry:
+            ghcr.io
+
+          username:
+            ${{ github.actor }}
+
+          password:
+            ${{ secrets.GITHUB_TOKEN }}
+
+
+
+
+
 
       # --------------------------------------------------
-      # 5. Image nach GHCR pushen
-      #    Läuft nur, wenn der Security Scan (Schritt 3) erfolgreich war.
+      # 5. Docker Images nach GHCR pushen
+      #
+      # Beide Tags werden veröffentlicht:
+      #
+      # - Commit SHA
+      # - Release Version
       # --------------------------------------------------
-      - name: Image nach GHCR
+
+      - name: Image nach GHCR pushen
+
+
         run: |
-          docker push ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
-          docker push ghcr.io/${{ github.repository }}/pacman-app:v1.0.0
+
+
+          docker push \
+            $IMAGE_NAME:${{ github.sha }}
+
+
+          docker push \
+            $IMAGE_NAME:$RELEASE_TAG
+
+
+
+
+
 
       # --------------------------------------------------
-      # 6. Digest des gepushten Images anzeigen
-      #    Dient der Nachvollziehbarkeit, welches Image tatsächlich
-      #    in der Registry liegt.
+      # 6. Registry Digest anzeigen
+      #
+      # Nachweis welches Image tatsächlich
+      # veröffentlicht wurde.
       # --------------------------------------------------
+
       - name: Image Digest anzeigen
+
+
         run: |
-          docker inspect ghcr.io/${{ github.repository }}/pacman-app:v1.0.0
+
+
+          echo "Veröffentlichtes Image:"
+
+
+          echo $IMAGE_NAME:$RELEASE_TAG
+
+
+          docker pull \
+            $IMAGE_NAME:$RELEASE_TAG
+
+
+          docker inspect \
+            --format='{{index .RepoDigests 0}}' \
+            $IMAGE_NAME:$RELEASE_TAG
+
+
+
+
+
+
+      # --------------------------------------------------
+      # 7. Release erfolgreich
+      # --------------------------------------------------
+
+      - name: Release erfolgreich abgeschlossen
+
+
+        run: |
+
+
+          echo "================================="
+          echo "GHCR Release erfolgreich"
+          echo "Image:"
+          echo "$IMAGE_NAME:$RELEASE_TAG"
+          echo "Commit:"
+          echo "${{ github.sha }}"
+          echo "================================="
