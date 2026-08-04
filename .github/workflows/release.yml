@@ -1,10 +1,77 @@
 name: Release
 
+permissions:
+  contents: read
+  packages: write
+
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  release:
+  build-test:
+    name: Build and Test
     runs-on: ubuntu-latest
+
     steps:
-      - run: echo "Release workflow"
+      # --------------------------------------------------
+      # 1. Repository auschecken
+      # --------------------------------------------------
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # 2. Docker Image bauen
+      #    Direkt mit dem vollen GHCR-Pfad taggen, damit Scan,
+      #    Login und Push alle denselben Tag referenzieren.
+      # --------------------------------------------------
+      - name: Docker Image erstellen
+        run: |
+          docker build \
+            -t ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }} \
+            -t ghcr.io/${{ github.repository }}/pacman-app:v1.0.0 .
+
+      # --------------------------------------------------
+      # 3. Security Scan VOR dem Push
+      #    Trivy scannt das lokal gebaute Image im Docker-Daemon.
+      #    exit-code: 1 lässt den Job bei CRITICAL/HIGH fehlschlagen,
+      #    sodass ein verwundbares Image NICHT in die Registry gelangt.
+      # --------------------------------------------------
+      - name: Security Scan Docker Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+      # --------------------------------------------------
+      # 4. Login bei GHCR
+      #    Erst kurz vor dem Push, wird vorher nicht benötigt.
+      # --------------------------------------------------
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------
+      # 5. Image nach GHCR pushen
+      #    Läuft nur, wenn der Security Scan (Schritt 3) erfolgreich war.
+      # --------------------------------------------------
+      - name: Image nach GHCR
+        run: |
+          docker push ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/pacman-app:v1.0.0
+
+      # --------------------------------------------------
+      # 6. Digest des gepushten Images anzeigen
+      #    Dient der Nachvollziehbarkeit, welches Image tatsächlich
+      #    in der Registry liegt.
+      # --------------------------------------------------
+      - name: Image Digest anzeigen
+        run: |
+          docker inspect ghcr.io/${{ github.repository }}/pacman-app:v1.0.0

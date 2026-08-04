@@ -206,12 +206,16 @@ jobs:
 
       # --------------------------------------------------
       # 10. Docker Image bauen
+      #     Direkt mit dem vollen GHCR-Pfad taggen, damit
+      #     "pacman-app" nicht doppelt vorkommt (kein separates
+      #     lokales Tag + erneutes Umtaggen für GHCR).
+      #     Kein "latest"-Tag: jedes Image ist über den
+      #     Commit-SHA eindeutig versioniert.
       # --------------------------------------------------
       - name: Docker Image erstellen
         run: |
           docker build \
-            -t pacman-app:${{ github.sha }} \
-            -t pacman-app:latest .
+            -t ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }} .
 
 
 
@@ -232,11 +236,7 @@ jobs:
       # --------------------------------------------------
       - name: Image nach GHCR pushen
         run: |
-          docker tag pacman-app:${{ github.sha }} \
-          ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
-
-          docker push \
-          ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/pacman-app:${{ github.sha }}
 
 
 
