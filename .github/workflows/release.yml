@@ -23,7 +23,14 @@ permissions:
 # Release erfolgt nach erfolgreichem Push auf main.
 # Dieser Release-Workflow ist ausschließlich für den main Branch
 # vorgesehen (kein Push-Trigger für Feature-Branches).
-# Zusätzlich kann der Release manuell gestartet werden.
+#
+# Feature-Branches bewusst NICHT im push-Trigger: Code auf ihnen
+# ist noch nicht abgeschlossen/reviewed. Ein Release (inkl. Push
+# des Images nach GHCR) soll nur aus main erfolgen, damit keine
+# unfertigen Stände veröffentlicht werden.
+#
+# Zusätzlich kann der Release manuell gestartet werden (z. B. um
+# testweise ein Image von einem anderen Branch zu bauen).
 # ----------------------------------------------------------
 
 on:
@@ -121,7 +128,7 @@ jobs:
       - name: Security Scan Docker Image
 
 
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
 
 
         with:
