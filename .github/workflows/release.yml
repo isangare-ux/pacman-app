@@ -240,7 +240,216 @@ jobs:
 
 
       # --------------------------------------------------
-      # 7. Release erfolgreich
+      # 7. GitOps Repository auschecken
+      #
+      # Nur wenn dieser Lauf tatsaechlich von main stammt. Bei einem
+      # workflow_dispatch von einem Feature-Branch soll zwar weiterhin
+      # gebaut/gescannt/gepusht werden (bestehendes Verhalten), aber
+      # KEIN GitOps-Update ausgeloest werden.
+      #
+      # GITOPS_TOKEN ist ein separates Actions-Secret (siehe Doku),
+      # da der Standard-GITHUB_TOKEN nur Zugriff auf DIESES Repository
+      # (pacman-app) hat, nicht auf pacman-gitops.
+      # --------------------------------------------------
+
+      - name: GitOps Repository auschecken
+
+        if: github.ref == 'refs/heads/main'
+
+        uses: actions/checkout@v4
+
+        with:
+
+          repository: isangare-ux/pacman-gitops
+
+          ref: main
+
+          path: pacman-gitops
+
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+
+
+
+
+      # --------------------------------------------------
+      # 8. Kustomize installieren
+      #
+      # Fest gepinnte Version (keine "latest"-Installation), damit das
+      # Rendering-Verhalten reproduzierbar bleibt. Aktuell v5.7.1 - bei
+      # Bedarf hier bewusst und dokumentiert anheben.
+      # --------------------------------------------------
+
+      - name: Kustomize installieren (fest gepinnte Version v5.7.1)
+
+        if: github.ref == 'refs/heads/main'
+
+        env:
+
+          KUSTOMIZE_VERSION: v5.7.1
+
+        run: |
+
+          curl -sfLo kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          tar -xzf kustomize.tar.gz
+          chmod +x kustomize
+          sudo mv kustomize /usr/local/bin/kustomize
+          rm kustomize.tar.gz
+          kustomize version
+
+
+
+
+
+      # --------------------------------------------------
+      # 9. Dev-Image auf den soeben veroeffentlichten Commit-SHA-Tag
+      #    setzen
+      #
+      # "kustomize edit set image" ergaenzt/aktualisiert den
+      # images:-Block robust ueber die Kustomize-API, statt fragil per
+      # sed einen (im Dev-Overlay noch gar nicht vorhandenen) newTag zu
+      # ersetzen.
+      # --------------------------------------------------
+
+      - name: Dev-Image auf Commit-SHA setzen
+
+        if: github.ref == 'refs/heads/main'
+
+        working-directory: pacman-gitops/apps/pacman/overlays/dev
+
+        run: |
+
+          kustomize edit set image \
+            $IMAGE_NAME=$IMAGE_NAME:${{ github.sha }}
+
+
+
+
+
+      # --------------------------------------------------
+      # 10. Dev-Overlay validieren
+      #
+      # Schlaegt der Kustomize-Build fehl, bricht dieser Step (und damit
+      # der gesamte Workflow) automatisch mit Fehler ab - es wird kein
+      # ungueltiger Stand committet.
+      # --------------------------------------------------
+
+      - name: Dev-Overlay validieren
+
+        if: github.ref == 'refs/heads/main'
+
+        working-directory: pacman-gitops
+
+        run: |
+
+          kustomize build apps/pacman/overlays/dev > /dev/null
+
+
+
+
+
+      # --------------------------------------------------
+      # 11. Aenderungsumfang pruefen
+      #
+      # Zwei Sicherheitsnetze:
+      # - Prod (apps/pacman/overlays/prod/) darf durch diesen Workflow
+      #   NIEMALS veraendert werden.
+      # - Es darf ausschliesslich die Dev-Overlay-kustomization.yaml
+      #   veraendert worden sein, keine weitere Datei.
+      # --------------------------------------------------
+
+      - name: Aenderungsumfang pruefen (nur Dev, Prod unveraendert)
+
+        if: github.ref == 'refs/heads/main'
+
+        working-directory: pacman-gitops
+
+        run: |
+
+          if [ -n "$(git diff --name-only -- apps/pacman/overlays/prod/)" ]; then
+            echo "FEHLER: apps/pacman/overlays/prod/ wurde veraendert - das ist nicht erlaubt." >&2
+            git diff --stat -- apps/pacman/overlays/prod/
+            exit 1
+          fi
+
+          CHANGED_FILES="$(git diff --name-only)"
+          EXPECTED_FILE="apps/pacman/overlays/dev/kustomization.yaml"
+
+          if [ -n "$CHANGED_FILES" ] && [ "$CHANGED_FILES" != "$EXPECTED_FILE" ]; then
+            echo "FEHLER: unerwartete Dateien wurden veraendert:" >&2
+            echo "$CHANGED_FILES" >&2
+            exit 1
+          fi
+
+          echo "Aenderungsumfang OK: Prod unveraendert, nur $EXPECTED_FILE betroffen (falls ueberhaupt eine Aenderung)."
+
+          echo "--- Dev-Diff ---"
+          git diff -- "$EXPECTED_FILE"
+
+
+
+
+
+      # --------------------------------------------------
+      # 12. GitOps Commit erstellen
+      #
+      # Verwendet die uebliche github-actions[bot]-Identitaet. Falls das
+      # Dev-Overlay bereits exakt diesen Commit-SHA-Tag traegt (z. B. bei
+      # einem erneuten manuellen Lauf), wird bewusst KEIN leerer Commit
+      # erzeugt, sondern nur eine verstaendliche Meldung ausgegeben.
+      # --------------------------------------------------
+
+      - name: GitOps Commit erstellen
+
+        if: github.ref == 'refs/heads/main'
+
+        id: gitops_commit
+
+        working-directory: pacman-gitops
+
+        run: |
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add apps/pacman/overlays/dev/kustomization.yaml
+
+          if git diff --cached --quiet; then
+            echo "Dev-Overlay verwendet bereits den Commit-SHA-Tag ${{ github.sha }} - kein neuer Commit noetig."
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore: Dev-Image auf Commit-SHA aktualisieren (${{ github.sha }})"
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+
+
+
+
+      # --------------------------------------------------
+      # 13. GitOps Commit pushen
+      #
+      # Nur wenn Schritt 12 tatsaechlich einen neuen Commit erzeugt hat.
+      # Kein Force-Push.
+      # --------------------------------------------------
+
+      - name: GitOps Commit pushen
+
+        if: github.ref == 'refs/heads/main' && steps.gitops_commit.outputs.committed == 'true'
+
+        working-directory: pacman-gitops
+
+        run: |
+
+          git push origin main
+
+
+
+
+
+      # --------------------------------------------------
+      # 14. Release erfolgreich
       # --------------------------------------------------
 
       - name: Release erfolgreich abgeschlossen
@@ -252,7 +461,13 @@ jobs:
           echo "================================="
           echo "GHCR Release erfolgreich"
           echo "Image:"
+          echo "$IMAGE_NAME:${{ github.sha }}"
           echo "$IMAGE_NAME:$RELEASE_TAG"
           echo "Commit:"
           echo "${{ github.sha }}"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "GitOps Dev-Overlay wurde aktualisiert (pacman-gitops, apps/pacman/overlays/dev)."
+          else
+            echo "GitOps-Update uebersprungen (kein Lauf auf main, sondern manueller Dispatch von einem anderen Ref)."
+          fi
           echo "================================="
