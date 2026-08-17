@@ -12,7 +12,7 @@
   "license": "GPLv3",
   "dependencies": {
     "body-parser": "^1.17.1",
-    "express": "^4.14.1",
+    "express": "^5.0.0",
     "mongodb": "^3.7.4",
     "pug": "^3.0.4"
   },
