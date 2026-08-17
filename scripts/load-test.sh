@@ -64,7 +64,10 @@ fi
 # Jeder Worker schreibt seine Ergebnisse in eigene Dateien (ein Byte pro
 # Request), damit parallele Prozesse sich nicht gegenseitig ueberschreiben.
 # Ausgezaehlt wird am Ende einfach ueber die Dateigroesse.
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pacman-load-test.XXXXXX")"
+if ! WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pacman-load-test.XXXXXX")"; then
+  echo "Fehler: Temporäres Arbeitsverzeichnis konnte nicht erstellt werden." >&2
+  exit 3
+fi
 STOP_FILE="$WORK_DIR/stop"
 WORKER_PIDS=()
 INTERRUPTED=0
