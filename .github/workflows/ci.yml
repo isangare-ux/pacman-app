@@ -1,77 +1,153 @@
-# CI-Pipeline für die Pacman-App: installiert Abhängigkeiten, führt Tests aus
-# und baut anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
-#CI-Workflow erweitert und optimiert. Build-, Test- und Validierungsschritte wurden verbessert, um die Qualitätssicherung zu automatisieren.
+# ----------------------------------------------------------
+# CI-Pipeline für die Pacman-App
+#
+# Installiert Abhängigkeiten, führt die vorhandenen Tests aus und baut
+# anschließend ein Docker-Image, um die Buildfähigkeit sicherzustellen.
+#
+# Es erfolgt KEINE Veröffentlichung nach GHCR. Das Image wird ausschließlich
+# lokal auf dem Runner gebaut und danach verworfen. Die Veröffentlichung
+# eines Release-Images ist Aufgabe des separaten release.yml-Workflows,
+# der ausschließlich aus main ausgelöst wird.
+# ----------------------------------------------------------
+
 name: CI Pipeline
 
+# ----------------------------------------------------------
+# Berechtigungen nach Least-Privilege-Prinzip
+#
+# contents:
+#   Lesen des Repositorys (Checkout).
+#
+# Kein "packages: write", da dieser Workflow keine Images veröffentlicht.
+# ----------------------------------------------------------
 permissions:
   contents: read
-  packages: write
 
-# Löst den Workflow bei Pushes auf main/develop/feature/** sowie bei Pull Requests auf main aus.
+# ----------------------------------------------------------
+# Workflow Trigger
 #
-# Hinweis: Ein Push auf einen Feature-Branch mit bereits offenem PR nach main
-# löst den Workflow dadurch zweimal aus (push + pull_request synchronize
-# für denselben Commit).
+# push:
+#   Läuft bei jedem Push auf main, develop und alle Feature-Branches
+#   (feature/**, z. B. feature/login). Dadurch wird jeder Code-Stand
+#   frühzeitig gebaut und getestet, unabhängig davon, ob bereits ein
+#   Pull Request existiert.
+#
+# pull_request:
+#   Läuft zusätzlich bei jedem Pull Request nach main, damit der
+#   Merge-Kandidat selbst (inklusive eines eventuellen Merge-Commits)
+#   geprüft wird, bevor gemergt werden darf.
+#
+# Hinweis: Ein Push auf einen Feature-Branch mit bereits offenem PR nach
+# main löst den Workflow dadurch zweimal aus (push + pull_request
+# synchronize für denselben Commit). Das ist bewusst in Kauf genommen,
+# um sowohl den reinen Branch-Stand als auch den PR-Kontext abzudecken.
+# ----------------------------------------------------------
 on:
   push:
     branches:
+      - main
       - develop
       - feature/** # alle Feature-Branches (z. B. feature/login)
+
   pull_request:
     branches:
       - main
-  
+
 jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
 
     steps:
-      # Holt den Quellcode des Repositories in die Runner-Umgebung.
+
+      # --------------------------------------------------
+      # 1. Repository Checkout
+      #
+      # Holt den Quellcode des Repositories in die Runner-Umgebung,
+      # da alle nachfolgenden Schritte (npm, docker build, ...) auf
+      # dem Dateisystem des Runners arbeiten.
+      # --------------------------------------------------
       - name: Repository auschecken
         uses: actions/checkout@v4
 
-      # Installiert die passende Node.js-Version für den Build.
+      # --------------------------------------------------
+      # 2. Node.js-Umgebung einrichten
+      #
+      # Feste Node-Version (16.19.0), passend zur verbindlichen
+      # Projektbasis, damit Build und Tests reproduzierbar auf
+      # derselben Laufzeitversion ausgeführt werden wie lokal/produktiv.
+      # --------------------------------------------------
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "16.19.0"
 
-        # Prüft die installierte Node.js-Version.
-      - name: Anzeigen der Node-Version
+      # Dient als Nachweis in den Workflow-Logs, welche Node-Version
+      # tatsächlich verwendet wurde (Debugging/Nachvollziehbarkeit).
+      - name: Node-Version anzeigen
         run: node --version
 
-      # Installiert die Projektabhängigkeiten reproduzierbar anhand der package-lock.json.
+      # --------------------------------------------------
+      # 3. Abhängigkeiten installieren
+      #
+      # "npm ci" statt "npm install": installiert exakt die in
+      # package-lock.json fixierten Versionen und bricht ab, falls
+      # package.json und package-lock.json nicht übereinstimmen.
+      # Dadurch reproduzierbare, deterministische Installationen.
+      # --------------------------------------------------
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      # Führt die Testsuite aus. continue-on-error sorgt dafür, dass die Pipeline
-      # trotz fehlschlagender Tests weiterläuft (z. B. um trotzdem den Docker-Build zu prüfen).
+      # --------------------------------------------------
+      # 4. Tests ausführen
+      #
+      # Führt die vorhandene Testsuite aus. Schlägt ein Test fehl,
+      # bricht "npm test" mit einem Exit-Code ungleich 0 ab und damit
+      # automatisch auch dieser Workflow-Schritt - alle nachfolgenden
+      # Schritte (inklusive Docker-Build) werden dann nicht ausgeführt.
+      # --------------------------------------------------
       - name: Tests ausführen
         run: npm test
-        continue-on-error: true
 
-      # Richtet Docker Buildx ein, das für erweiterte Docker-Build-Funktionen benötigt wird.
+      # --------------------------------------------------
+      # 5. Docker Compose validieren
+      #
+      # Prüft die docker-compose-Konfiguration rein syntaktisch
+      # ("config --quiet" rendert die Datei, ohne Container zu starten).
+      # Fängt fehlerhafte Compose-Dateien frühzeitig ab, bevor sie in
+      # der lokalen Entwicklung oder im Betrieb Probleme verursachen.
+      # --------------------------------------------------
+      - name: Docker Compose validieren
+        run: docker compose config --quiet
+
+      # --------------------------------------------------
+      # 6. Docker Buildx einrichten
+      #
+      # Buildx wird als Docker-Build-Backend benötigt, u. a. für
+      # erweitertes Caching und konsistentes Build-Verhalten zwischen
+      # lokaler Umgebung und GitHub-Actions-Runner.
+      # --------------------------------------------------
       - name: Docker Buildx einrichten
         uses: docker/setup-buildx-action@v3
 
-      # Baut das Docker-Image und taggt es mit dem aktuellen Commit-SHA zur Nachverfolgbarkeit.
+      # --------------------------------------------------
+      # 7. Docker Image bauen (nur lokal)
+      #
+      # Baut das Image ausschließlich auf dem Runner, um die
+      # Buildfähigkeit des Dockerfiles sicherzustellen. Es erfolgt
+      # bewusst KEIN Login bei GHCR und KEIN Push in eine Registry -
+      # das ist Aufgabe des separaten release.yml-Workflows.
+      # --------------------------------------------------
       - name: Docker Image erstellen
         run: |
           docker build \
-              -t pacman-app:latest \
-              -t pacman-app:${{ github.sha }} .
+            -t pacman-app:${{ github.sha }} .
 
-      # Abschluss-Schritt, der signalisiert, dass die Pipeline durchgelaufen ist.
+      # --------------------------------------------------
+      # 8. Abschlussmeldung
+      #
+      # Dient als klar erkennbarer, erfolgreicher Abschluss der
+      # Pipeline in den Workflow-Logs.
+      # --------------------------------------------------
       - name: Workflow erfolgreich abgeschlossen
         run: echo "CI Pipeline erfolgreich ausgeführt."
-
-      - name: Login bei GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          # Authentifizierung an der GitHub Container Registry (GHCR)
-          # Benutzername: GitHub-Benutzer des Workflow-Auslösers
-          # Passwort: Automatisch von GitHub bereitgestelltes Zugriffstoken
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 
-ghcr.io/isangare-ux/pacman-app/pacman-app:e7c1216b2be3fc0549057c3e2cbf490f73d2b508 (alpine 3.24.1)
+ghcr.io/isangare-ux/pacman-app:e7c1216b2be3fc0549057c3e2cbf490f73d2b508 (alpine 3.24.1)
 ==================================================================================================
 Total: 0 (UNKNOWN: 0, LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0)
 
