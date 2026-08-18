@@ -198,9 +198,17 @@ jobs:
           docker push \
             $IMAGE_NAME:${{ github.sha }}
 
-
-          docker push \
-            $IMAGE_NAME:$RELEASE_TAG
+          # AP28 D08: $RELEASE_TAG (v1.0.0) ist ein fester, geteilter Tag.
+          # Nur bei einem echten main-Release ueberschreiben - ein
+          # manueller workflow_dispatch von einem Testbranch (z. B. fuer
+          # ein bewusst fehlerhaftes D08-Testimage) soll diesen stabilen
+          # Tag NICHT ueberschreiben.
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker push \
+              $IMAGE_NAME:$RELEASE_TAG
+          else
+            echo "Kein main-Lauf - $IMAGE_NAME:$RELEASE_TAG wird NICHT ueberschrieben."
+          fi
 
 
 
