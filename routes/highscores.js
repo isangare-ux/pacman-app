@@ -13,6 +13,13 @@ router.use(function timeLog (req, res, next) {
 })
 
 router.get('/list', urlencodedParser, function(req, res, next) {
+    // AP28 D08 Testversion: bewusst kaputtes Image fuer den GitOps-
+    // Rollback-Test. Container startet normal, aber der Readiness-Probe-
+    // Endpunkt (/highscores/list) liefert immer HTTP 500 - simuliert einen
+    // echten Anwendungsfehler im Image selbst statt einer Konfigurations-
+    // abweichung (siehe D02/D03). Keine Daten werden geloescht/veraendert.
+    return res.status(500).json({ error: 'AP28 D08 Testversion: bewusst fehlerhaftes Image' });
+
     console.log('[GET /highscores/list]');
     Database.getDb(req.app, function(err, db) {
         if (err) {
