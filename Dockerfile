@@ -1,8 +1,8 @@
 # Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte Sicherheitspraktiken umgesetzt.
 # Die Anwendung wird als nicht privilegierter Benutzer ausgeführt, um das Sicherheitsrisiko zu reduzieren.
 
-# Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
-FROM node:22-alpine
+# Verwendet die verbindlich vorgegebene feste Node.js-Basisversion.
+FROM node:16.19.0-bullseye-slim
 
 LABEL maintainer="Ibrahim Sangaré"
 
