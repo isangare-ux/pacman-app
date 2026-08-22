@@ -31,9 +31,9 @@ COPY package*.json ./
 # finalen Image entfernt.
 
 RUN npm ci --omit=dev \
-    && npm cache clean --force \
-    && rm -rf /usr/local/lib/node_modules/npm \
-    && rm -f /usr/local/bin/npm /usr/local/bin/npx
+  && npm cache clean --force \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 # Kopiert den vollständigen Anwendungscode in den Container.
 COPY . .
