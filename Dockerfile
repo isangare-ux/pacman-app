@@ -1,5 +1,5 @@
-# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte Sicherheitspraktiken umgesetzt.
-# Die Anwendung wird als nicht privilegierter Benutzer ausgeführt, um das Sicherheitsrisiko zu reduzieren.
+# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte
+# Sicherheitspraktiken umgesetzt.
 
 # Verwendet die verbindlich vorgegebene feste Node.js-Basisversion.
 FROM node:16.19.0-bullseye-slim
@@ -16,11 +16,11 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Kopiert package.json und package-lock.json in das Arbeitsverzeichnis.
-# Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern (Layer-Cache).
+# Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern.
 COPY package*.json ./
 
-# Installiert ausschließlich die produktiven Abhängigkeiten.
-# Entwicklungsabhängigkeiten werden nicht in das Image übernommen.
+# Installiert ausschließlich produktive Abhängigkeiten.
+# Entwicklungsabhängigkeiten werden nicht in das Runtime-Image übernommen.
 # npm ci sorgt für einen reproduzierbaren Build anhand der package-lock.json.
 #
 # npm selbst wird zur Laufzeit nicht benötigt (Start erfolgt direkt über
@@ -29,7 +29,6 @@ COPY package*.json ./
 # sonst als Schwachstellen im Runtime-Image auf, obwohl sie nur Build-Zeit
 # betreffen. Daher wird npm nach der Installation vollständig aus dem
 # finalen Image entfernt.
-
 RUN npm ci --omit=dev \
   && npm cache clean --force \
   && rm -rf /usr/local/lib/node_modules/npm \
@@ -38,13 +37,11 @@ RUN npm ci --omit=dev \
 # Kopiert den vollständigen Anwendungscode in den Container.
 COPY . .
 
-# Führt die Anwendung als Benutzer "node" aus,
-# um die Sicherheit des Containers zu erhöhen.
+# Führt die Anwendung als nicht privilegierten Benutzer aus.
 USER node
 
-# Dokumentiert den von der Anwendung verwendeten Port.
+# Dokumentiert den verwendeten Anwendungsport.
 EXPOSE 8080
 
-# Startet die Anwendung direkt über node (npm ist im Runtime-Image nicht
-# mehr vorhanden, "npm start" würde daher fehlschlagen).
+# Startet die Anwendung direkt über Node.js.
 CMD ["node", "."]

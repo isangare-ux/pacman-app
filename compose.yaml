@@ -23,21 +23,22 @@ services:
     ports:
       - "8080:8080"
 
-    # Verbindungsparameter zur MongoDB.
+    # Verbindungsparameter für MongoDB.
     # Der Hostname "mongodb" entspricht dem Compose-Servicenamen.
     environment:
       MONGO_SERVICE_HOST: mongodb
       MONGO_DATABASE: pacman
       MY_MONGO_PORT: "27017"
 
-    # Prüft über Node.js, ob die Anwendung auf Port 8080
-    # erfolgreich per HTTP erreichbar ist.
+  # Prüft mit Node.js, ob die Anwendung auf Port 8080
+  # erfolgreich HTTP 200 liefert.
+    # Dadurch wird kein zusätzliches curl-Paket benötigt.
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080',r=>process.exit(r.statusCode===200?0:1))"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-# Benannter Datenträger für die persistente MongoDB-Datenhaltung.
+# Benannter Datenträger für persistente MongoDB-Daten.
 volumes:
   mongodb_data:
