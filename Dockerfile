@@ -29,6 +29,7 @@ COPY package*.json ./
 # sonst als Schwachstellen im Runtime-Image auf, obwohl sie nur Build-Zeit
 # betreffen. Daher wird npm nach der Installation vollständig aus dem
 # finalen Image entfernt.
+
 RUN npm ci --omit=dev \
     && npm cache clean --force \
     && rm -rf /usr/local/lib/node_modules/npm \
