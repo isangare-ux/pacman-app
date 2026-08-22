@@ -9,6 +9,12 @@ LABEL maintainer="Ibrahim Sangaré"
 # Legt das Arbeitsverzeichnis innerhalb des Containers fest.
 WORKDIR /usr/src/app
 
+# Aktualisiert die installierten Betriebssystempakete und entfernt anschließend
+# die Paketlisten, damit das Docker-Image möglichst klein bleibt.
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
 # Kopiert package.json und package-lock.json in das Arbeitsverzeichnis.
 # Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern (Layer-Cache).
 COPY package*.json ./
@@ -23,6 +29,7 @@ COPY package*.json ./
 # sonst als Schwachstellen im Runtime-Image auf, obwohl sie nur Build-Zeit
 # betreffen. Daher wird npm nach der Installation vollständig aus dem
 # finalen Image entfernt.
+
 RUN npm ci --omit=dev \
     && npm cache clean --force \
     && rm -rf /usr/local/lib/node_modules/npm \
