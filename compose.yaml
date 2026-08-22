@@ -1,11 +1,43 @@
 services:
+  mongodb:
+    # Verwendet die verbindlich vorgegebene feste MongoDB-Version.
+    image: mongo:4.4.30-focal
+
+    # Speichert die MongoDB-Daten persistent außerhalb
+    # des Container-Lebenszyklus.
+    volumes:
+      - mongodb_data:/data/db
+
+    # Prüft, ob MongoDB Anfragen erfolgreich beantworten kann.
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   pacman:
+    # Baut das Pacman-Image aus dem lokalen Dockerfile.
     build: .
+
+    # Veröffentlicht ausschließlich den Anwendungsport auf dem Host.
     ports:
       - "8080:8080"
 
+    # Verbindungsparameter zur MongoDB.
+    # Der Hostname "mongodb" entspricht dem Compose-Servicenamen.
+    environment:
+      MONGO_SERVICE_HOST: mongodb
+      MONGO_DATABASE: pacman
+      MY_MONGO_PORT: "27017"
+
+    # Prüft über Node.js, ob die Anwendung auf Port 8080
+    # erfolgreich per HTTP erreichbar ist.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080',r=>process.exit(r.statusCode===200?0:1))"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+# Benannter Datenträger für die persistente MongoDB-Datenhaltung.
+volumes:
+  mongodb_data:
