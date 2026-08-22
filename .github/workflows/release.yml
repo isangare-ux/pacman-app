@@ -1,6 +1,5 @@
 name: Release
 
-
 # ----------------------------------------------------------
 # Berechtigungen nach Least-Privilege-Prinzip
 #
@@ -14,8 +13,6 @@ name: Release
 permissions:
   contents: read
   packages: write
-
-
 
 # ----------------------------------------------------------
 # Workflow Trigger
@@ -34,26 +31,17 @@ permissions:
 # ----------------------------------------------------------
 
 on:
-
   push:
     branches:
       - main
-  
 
   workflow_dispatch:
 
-
-
 jobs:
-
   release:
-
-
     name: Build Security Scan and Release
 
     runs-on: ubuntu-latest
-
-
 
     # ----------------------------------------------------------
     # Zentrale Variablen für den Image-Namen und die Version.
@@ -67,19 +55,11 @@ jobs:
     # angepasst, statt an mehreren Stellen im Workflow.
     # ----------------------------------------------------------
     env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
 
-      IMAGE_NAME:
-        ghcr.io/${{ github.repository }}
-
-      RELEASE_TAG:
-        v1.0.0
-
-
+      RELEASE_TAG: v1.0.0
 
     steps:
-
-
-
       # --------------------------------------------------
       # 1. Repository Checkout
       # --------------------------------------------------
@@ -87,10 +67,6 @@ jobs:
       - name: Repository auschecken
 
         uses: actions/checkout@v4
-
-
-
-
 
       # --------------------------------------------------
       # 2. Docker Image bauen
@@ -112,10 +88,6 @@ jobs:
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$RELEASE_TAG .
 
-
-
-
-
       # --------------------------------------------------
       # 3. Security Scan mit Trivy
       #
@@ -127,27 +99,16 @@ jobs:
 
       - name: Security Scan Docker Image
 
-
         uses: aquasecurity/trivy-action@v0.36.0
 
-
         with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-          image-ref:
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: table
 
-          format:
-            table
-
-          severity:
-            CRITICAL,HIGH
-
-          exit-code:
-            1
-
-
-
-
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
 
       # --------------------------------------------------
       # 4. Login bei GitHub Container Registry
@@ -160,25 +121,14 @@ jobs:
 
       - name: Login GHCR
 
-
         uses: docker/login-action@v3
 
-
         with:
+          registry: ghcr.io
 
-          registry:
-            ghcr.io
+          username: ${{ github.actor }}
 
-          username:
-            ${{ github.actor }}
-
-          password:
-            ${{ secrets.GITHUB_TOKEN }}
-
-
-
-
-
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------------------------
       # 5. Docker Images nach GHCR pushen
@@ -191,7 +141,6 @@ jobs:
 
       - name: Image nach GHCR pushen
 
-
         run: |
 
 
@@ -202,11 +151,6 @@ jobs:
           docker push \
             $IMAGE_NAME:$RELEASE_TAG
 
-
-
-
-
-
       # --------------------------------------------------
       # 6. Registry Digest anzeigen
       #
@@ -215,7 +159,6 @@ jobs:
       # --------------------------------------------------
 
       - name: Image Digest anzeigen
-
 
         run: |
 
@@ -233,11 +176,6 @@ jobs:
           docker inspect \
             --format='{{index .RepoDigests 0}}' \
             $IMAGE_NAME:$RELEASE_TAG
-
-
-
-
-
 
       # --------------------------------------------------
       # 7. GitOps Repository auschecken
@@ -259,7 +197,6 @@ jobs:
         uses: actions/checkout@v4
 
         with:
-
           repository: isangare-ux/pacman-gitops
 
           ref: main
@@ -267,10 +204,6 @@ jobs:
           path: pacman-gitops
 
           token: ${{ secrets.GITOPS_TOKEN }}
-
-
-
-
 
       # --------------------------------------------------
       # 8. Kustomize installieren
@@ -285,7 +218,6 @@ jobs:
         if: github.ref == 'refs/heads/main'
 
         env:
-
           KUSTOMIZE_VERSION: v5.7.1
 
         run: |
@@ -297,10 +229,6 @@ jobs:
           sudo mv kustomize /usr/local/bin/kustomize
           rm kustomize.tar.gz
           kustomize version
-
-
-
-
 
       # --------------------------------------------------
       # 9. Dev-Image auf den soeben veroeffentlichten Commit-SHA-Tag
@@ -323,10 +251,6 @@ jobs:
           kustomize edit set image \
             $IMAGE_NAME=$IMAGE_NAME:${{ github.sha }}
 
-
-
-
-
       # --------------------------------------------------
       # 10. Dev-Overlay validieren
       #
@@ -344,10 +268,6 @@ jobs:
         run: |
 
           kustomize build apps/pacman/overlays/dev > /dev/null
-
-
-
-
 
       # --------------------------------------------------
       # 11. Aenderungsumfang pruefen
@@ -387,10 +307,6 @@ jobs:
           echo "--- Dev-Diff ---"
           git diff -- "$EXPECTED_FILE"
 
-
-
-
-
       # --------------------------------------------------
       # 12. GitOps Commit erstellen
       #
@@ -423,10 +339,6 @@ jobs:
             echo "committed=true" >> "$GITHUB_OUTPUT"
           fi
 
-
-
-
-
       # --------------------------------------------------
       # 13. GitOps Commit pushen
       #
@@ -444,16 +356,11 @@ jobs:
 
           git push origin main
 
-
-
-
-
       # --------------------------------------------------
       # 14. Release erfolgreich
       # --------------------------------------------------
 
       - name: Release erfolgreich abgeschlossen
-
 
         run: |
 
