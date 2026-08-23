@@ -1,33 +1,43 @@
-# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte Sicherheitspraktiken umgesetzt.
-# Die Anwendung wird als nicht privilegierter Benutzer ausgeführt, um das Sicherheitsrisiko zu reduzieren.
+# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte
+# Sicherheitspraktiken umgesetzt.
 
-# Verwendet das offizielle Node.js 22 Alpine-Image als schlanke Basis.
-FROM node:16.19.0-bullseye-slim 
+# Verwendet die verbindlich vorgegebene feste Node.js-Basisversion.
+FROM node:16.19.0-bullseye-slim
 
-# Setzt Metadaten für das Image (hier: verantwortliche Person), sichtbar über "docker inspect".
 LABEL maintainer="Ibrahim Sangaré"
 
 # Legt das Arbeitsverzeichnis innerhalb des Containers fest.
 WORKDIR /usr/src/app
 
-# Kopiert package.json und package-lock.json in das Arbeitsverzeichnis.
-# Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern (Layer-Cache).
+# Aktualisiert die im Basisimage enthaltenen Debian-Pakete auf verfügbare
+# Sicherheitsstände. Anschließend werden die Paketlisten entfernt.
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
+# Kopiert zunächst nur die Paketdefinitionen.
+# Dadurch kann Docker den Dependency-Layer zwischenspeichern.
 COPY package*.json ./
 
-# Installiert ausschließlich die produktiven Abhängigkeiten.
-# Entwicklungsabhängigkeiten werden nicht in das Image übernommen.
-# npm ci sorgt für einen reproduzierbaren Build anhand der package-lock.json.
-RUN npm ci --omit=dev
+# Installiert ausschließlich produktive Abhängigkeiten reproduzierbar
+# anhand der package-lock.json.
+#
+# npm wird nach der Installation entfernt, da die Anwendung zur Laufzeit
+# direkt über Node.js gestartet wird. Dadurch wird die Runtime-Angriffsfläche
+# reduziert.
+RUN npm ci --omit=dev \
+  && npm cache clean --force \
+  && rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
-# Kopiert den vollständigen Anwendungscode in den Container.
+# Kopiert anschließend den Anwendungscode.
 COPY . .
 
-# Führt die Anwendung als Benutzer "node" aus,
-# um die Sicherheit des Containers zu erhöhen.
+# Führt die Anwendung als nicht privilegierten Benutzer aus.
 USER node
 
-# Dokumentiert den von der Anwendung verwendeten Port.
+# Dokumentiert den verwendeten Anwendungsport.
 EXPOSE 8080
 
-# Startet die Anwendung über das in package.json definierte Startskript.
-CMD ["npm", "start"]
+# Startet die Anwendung direkt über Node.js.
+CMD ["node", "."]
