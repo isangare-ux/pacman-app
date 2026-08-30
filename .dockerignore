@@ -1,2 +1,26 @@
-node_modules
-npm-debug.log
+# Lokale Node.js-Abhängigkeiten
+node_modules/
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# Lokale Umgebungsvariablen / Secrets
+.env
+.env.*
+!.env.example
+
+# CI / Dokumentation / Tests
+.github/
+docs/
+tests/
+
+# Lokale Hilfsskripte
+scripts/
+
+# Lokale Hilfs- und Nachweisdateien
+security_scan_ergebnis.txt
+
+# Docker-Compose wird im Runtime-Image nicht benötigt
+compose.yaml

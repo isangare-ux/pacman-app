@@ -30,6 +30,7 @@ COPY package*.json ./
 # betreffen. Daher wird npm nach der Installation vollständig aus dem
 # finalen Image entfernt.
 RUN npm ci --omit=dev \
+# werden beispielsweise produktive Pakete wie Express installiert, aber Entwicklungswerkzeuge wie Nodemon nicht.
   && npm cache clean --force \
   && rm -rf /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx

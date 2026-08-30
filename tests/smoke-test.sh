@@ -1,11 +1,10 @@
-#Smoke-Test ergänzt, um die Erreichbarkeit und grundlegende Funktionsfähigkeit der Anwendung automatisiert zu prüfen.
 #!/bin/bash
 
-curl -f http://localhost:8080
-
-if [ $? -eq 0 ]; then
-    echo "Smoke Test erfolgreich"
-else
-    echo "Smoke Test fehlgeschlagen"
+# Prüft die grundlegende Erreichbarkeit der Pacman-Anwendung.
+if ! curl -fsS --max-time 5 http://localhost:8080 >/dev/null; then
+    echo "Smoke Test fehlgeschlagen: Startseite nicht erreichbar"
     exit 1
 fi
+
+echo "Smoke Test erfolgreich"
+exit 0
