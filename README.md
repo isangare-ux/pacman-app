@@ -1,3 +1,75 @@
+cat > update-readme.sh <<'EOF'
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cat > README.md <<'README'
+
+# Pacman-App
+
+## Projektübersicht
+
+Dieses Projekt modernisiert eine historische Pacman-Node.js-Anwendung durch den Einsatz moderner DevOps-Praktiken.
+
+Ziel ist eine reproduzierbare Entwicklungs-, Build- und Deployment-Umgebung mit Docker, GitHub Actions, GitHub Container Registry, Kubernetes und GitOps.
+
+Das Gesamtprojekt ist auf zwei Repositories aufgeteilt:
+
+- `pacman-app` enthält Anwendungscode, Docker-Konfiguration, lokale Tests sowie CI- und Release-Workflows.
+- `pacman-gitops` enthält den gewünschten Kubernetes-Sollzustand, Kustomize-Overlays, Argo-CD-Konfigurationen sowie weitere Betriebsressourcen.
+
+---
+
+## Projektziele
+
+- Modernisierung einer bestehenden Node.js-Anwendung
+- Containerisierung mit Docker
+- Automatisierte Build- und Testprozesse mit GitHub Actions
+- Versionierung und Bereitstellung von Docker-Images über GHCR
+- Deployment auf Kubernetes
+- GitOps-basierte Verwaltung mit Argo CD
+- Trennung von Anwendungscode und Deployment-Sollzustand
+- Grundlage für Monitoring und Betriebsprozesse
+
+---
+
+## Projektstruktur
+
+```text
+pacman-app/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── release.yml
+├── bin/
+│   └── server.js
+├── docs/
+├── lib/
+│   ├── config.js
+│   └── database.js
+├── public/
+├── routes/
+│   ├── highscores.js
+│   ├── location.js
+│   └── user.js
+├── scripts/
+│   ├── load-test.sh
+│   ├── local-start.sh
+│   └── local-stop.sh
+├── tests/
+│   └── smoke-test.sh
+├── views/
+├── .dockerignore
+├── .env.example
+├── .gitignore
+├── app.js
+├── compose.yaml
+├── Dockerfile
+├── package.json
+├── package-lock.json
+└── README.md
+```
+
 # Pacman-App
 
 ## Projektübersicht
@@ -15,7 +87,6 @@ Dieses Projekt modernisiert eine historische Pacman-Node.js-Anwendung durch den 
 - Deployment auf einem Kubernetes-Cluster
 - GitOps-basierte Verwaltung der Kubernetes-Ressourcen mit Argo CD
 - Grundlage für Monitoring mit Prometheus und Grafana
-
 
 ## Projektstatus
 
