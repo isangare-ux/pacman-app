@@ -1,48 +1,35 @@
-# Sicherheitsmaßnahmen im Dockerfile verbessert und bewährte
-# Sicherheitspraktiken umgesetzt.
-
 # Verwendet die verbindlich vorgegebene feste Node.js-Basisversion.
 FROM node:16.19.0-bullseye-slim
 
 LABEL maintainer="Ibrahim Sangaré"
 
-# Legt das Arbeitsverzeichnis innerhalb des Containers fest.
+# Arbeitsverzeichnis im Container.
 WORKDIR /usr/src/app
 
-# Aktualisiert die installierten Betriebssystempakete und entfernt anschließend
-# die Paketlisten, damit das Docker-Image möglichst klein bleibt.
-RUN apt-get update \
-  && apt-get upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
-
-# Kopiert package.json und package-lock.json in das Arbeitsverzeichnis.
-# Dadurch kann Docker die Installation der Abhängigkeiten zwischenspeichern.
+# Zuerst nur Paketdefinitionen kopieren.
+# Dadurch kann Docker den Dependency-Layer cachen.
 COPY package*.json ./
 
-# Installiert ausschließlich produktive Abhängigkeiten.
-# Entwicklungsabhängigkeiten werden nicht in das Runtime-Image übernommen.
-# npm ci sorgt für einen reproduzierbaren Build anhand der package-lock.json.
+# Installiert ausschließlich produktive Abhängigkeiten
+# reproduzierbar anhand der package-lock.json.
 #
-# npm selbst wird zur Laufzeit nicht benötigt (Start erfolgt direkt über
-# node, siehe CMD unten). Die in npm gebündelten Abhängigkeiten
-# (u. a. brace-expansion, ip-address, picomatch, sigstore, tar) tauchen
-# sonst als Schwachstellen im Runtime-Image auf, obwohl sie nur Build-Zeit
-# betreffen. Daher wird npm nach der Installation vollständig aus dem
-# finalen Image entfernt.
+# npm wird anschließend entfernt, sofern die Anwendung
+# direkt mit node gestartet werden kann.
 RUN npm ci --omit=dev \
-# werden beispielsweise produktive Pakete wie Express installiert, aber Entwicklungswerkzeuge wie Nodemon nicht.
   && npm cache clean --force \
   && rm -rf /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
-# Kopiert den vollständigen Anwendungscode in den Container.
+# Anwendungscode kopieren.
 COPY . .
 
-# Führt die Anwendung als nicht privilegierten Benutzer aus.
+# Anwendung läuft als nicht privilegierter Benutzer.
 USER node
 
-# Dokumentiert den verwendeten Anwendungsport.
+# Dokumentierter Anwendungsport.
 EXPOSE 8080
 
-# Startet die Anwendung direkt über Node.js.
+# WICHTIG:
+# Erst nach Prüfung von package.json den tatsächlichen
+# Startbefehl hier eintragen.
 CMD ["node", "."]
