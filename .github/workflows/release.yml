@@ -178,6 +178,70 @@ jobs:
             $IMAGE_NAME:$RELEASE_TAG
 
       # --------------------------------------------------
+      # 6a. SBOM (CycloneDX) fuer das veroeffentlichte Image erzeugen
+      #
+      # Verwendet dieselbe Trivy-Action wie der Security Scan (Schritt 3),
+      # aber als eigenstaendige Funktion: Der Security Scan bewertet
+      # bekannte Schwachstellen, die SBOM dokumentiert die enthaltenen
+      # Softwarekomponenten. Referenz ist der Commit-SHA-Tag - dieselbe
+      # immutable Referenz, die auch bereits gescannt und gepusht wurde.
+      #
+      # exit-code wird bewusst NICHT gesetzt (Trivy bricht im SBOM-Modus
+      # nur bei einem echten Fehler beim Erzeugen der SBOM ab, nicht wegen
+      # Schwachstellen - das ist weiterhin Aufgabe des Security-Scan-Steps).
+      # --------------------------------------------------
+
+      - name: SBOM (CycloneDX) erzeugen
+
+        uses: aquasecurity/trivy-action@v0.36.0
+
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+          format: cyclonedx
+
+          output: pacman-sbom-${{ github.sha }}.cdx.json
+
+      # --------------------------------------------------
+      # 6b. SBOM validieren
+      #
+      # Schlaegt fehl, wenn keine verwertbare SBOM erzeugt wurde (Datei
+      # fehlt, ist leer oder enthaelt keine Komponenten).
+      # --------------------------------------------------
+
+      - name: SBOM validieren
+
+        run: |
+
+          test -s pacman-sbom-${{ github.sha }}.cdx.json
+
+          python3 -c "
+          import json, sys
+          with open('pacman-sbom-${{ github.sha }}.cdx.json') as f:
+              data = json.load(f)
+          components = data.get('components', [])
+          if not components:
+              print('FEHLER: SBOM enthaelt keine Komponenten.', file=sys.stderr)
+              sys.exit(1)
+          print(f'SBOM OK: {len(components)} Komponenten gefunden.')
+          "
+
+      # --------------------------------------------------
+      # 6c. SBOM als Workflow-Artefakt hochladen
+      # --------------------------------------------------
+
+      - name: SBOM als Artefakt hochladen
+
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: pacman-sbom-${{ github.sha }}
+
+          path: pacman-sbom-${{ github.sha }}.cdx.json
+
+          if-no-files-found: error
+
+      # --------------------------------------------------
       # 7. GitOps Repository auschecken
       #
       # Nur wenn dieser Lauf tatsaechlich von main stammt. Bei einem
