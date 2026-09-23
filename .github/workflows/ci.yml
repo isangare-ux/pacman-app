@@ -58,6 +58,22 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
 
+    # ----------------------------------------------------------
+    # MongoDB als Service-Container für den späteren HTTP-Smoke-Test
+    # (Schritt 8). Läuft ohne Authentifizierung - die Pacman-Anwendung
+    # baut ihre Verbindungs-Zugangsdaten nur, wenn MONGO_AUTH_USER UND
+    # MONGO_AUTH_PWD gesetzt sind (siehe lib/config.js); beide werden im
+    # Smoke-Test-Schritt bewusst nicht gesetzt.
+    #
+    # Ohne "container:" für den Job selbst ist der Service unter
+    # localhost:27017 auf dem Runner erreichbar.
+    # ----------------------------------------------------------
+    services:
+      mongodb:
+        image: mongo:4.4.30-focal
+        ports:
+          - 27017:27017
+
     steps:
 
       # --------------------------------------------------
@@ -121,7 +137,48 @@ jobs:
         run: docker compose config --quiet
 
       # --------------------------------------------------
-      # 6. Docker Buildx einrichten
+      # 6. GitOps-Overlays validieren
+      #
+      # Rendert Dev- und Prod-Overlay aus dem separaten pacman-gitops-
+      # Repository mit Kustomize. Ein fehlerhaftes YAML (z. B. defekter
+      # Patch, falsche Referenz) lässt "kustomize build" fehlschlagen
+      # und bricht damit automatisch auch diesen Workflow-Schritt ab.
+      #
+      # Feste Kustomize-Version wie in release.yml, damit das
+      # Rendering-Verhalten reproduzierbar bleibt.
+      # --------------------------------------------------
+      - name: pacman-gitops auschecken (nur lesend, zur Validierung)
+        uses: actions/checkout@v4
+        with:
+          repository: isangare-ux/pacman-gitops
+          ref: main
+          path: pacman-gitops-check
+
+      - name: Kustomize installieren (fest gepinnte Version v5.7.1)
+        env:
+          KUSTOMIZE_VERSION: v5.7.1
+        run: |
+          curl -sfLo kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          tar -xzf kustomize.tar.gz
+          chmod +x kustomize
+          sudo mv kustomize /usr/local/bin/kustomize
+          rm kustomize.tar.gz
+          kustomize version
+
+      - name: Dev- und Prod-Overlay rendern
+        working-directory: pacman-gitops-check
+        run: |
+          echo "--- Dev-Overlay ---"
+          kustomize build apps/pacman/overlays/dev > /dev/null
+          echo "OK: Dev-Overlay gültig."
+
+          echo "--- Prod-Overlay ---"
+          kustomize build apps/pacman/overlays/prod > /dev/null
+          echo "OK: Prod-Overlay gültig."
+
+      # --------------------------------------------------
+      # 7. Docker Buildx einrichten
       #
       # Buildx wird als Docker-Build-Backend benötigt, u. a. für
       # erweitertes Caching und konsistentes Build-Verhalten zwischen
@@ -131,7 +188,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # --------------------------------------------------
-      # 7. Docker Image bauen (nur lokal)
+      # 8. Docker Image bauen (nur lokal)
       #
       # Baut das Image ausschließlich auf dem Runner, um die
       # Buildfähigkeit des Dockerfiles sicherzustellen. Es erfolgt
@@ -144,7 +201,56 @@ jobs:
             -t pacman-app:${{ github.sha }} .
 
       # --------------------------------------------------
-      # 8. Abschlussmeldung
+      # 9. HTTP-Smoke-Test gegen den laufenden Container
+      #
+      # Startet das eben gebaute Image mit "--network host", damit der
+      # Container sowohl den MongoDB-Service (localhost:27017) erreicht
+      # als auch selbst über localhost:8080 ansprechbar ist. Geprüft
+      # werden die Startseite (statischer Endpunkt) und
+      # /highscores/list (datenbankabhängiger Endpunkt, siehe
+      # Aufgabenstellung Abschnitt 13).
+      # --------------------------------------------------
+      - name: Container für Smoke-Test starten
+        run: |
+          docker run -d \
+            --name pacman-smoke-test \
+            --network host \
+            -e MONGO_SERVICE_HOST=localhost \
+            -e MONGO_DATABASE=pacman \
+            -e MY_MONGO_PORT=27017 \
+            pacman-app:${{ github.sha }}
+
+      - name: Auf Bereitschaft warten
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/ > /dev/null; then
+              echo "OK: Anwendung ist erreichbar."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "FEHLER: Anwendung wurde innerhalb von 30s nicht bereit." >&2
+          docker logs pacman-smoke-test
+          exit 1
+
+      - name: Smoke-Test ausführen
+        run: |
+          echo "--- Startseite ---"
+          curl -sf http://localhost:8080/ > /dev/null
+          echo "OK: HTTP 200 auf /"
+
+          echo "--- Datenbankabhängiger Endpunkt ---"
+          curl -sf http://localhost:8080/highscores/list > /dev/null
+          echo "OK: HTTP 200 auf /highscores/list"
+
+      - name: Smoke-Test-Container aufräumen
+        if: always()
+        run: |
+          docker logs pacman-smoke-test || true
+          docker rm -f pacman-smoke-test || true
+
+      # --------------------------------------------------
+      # 10. Abschlussmeldung
       #
       # Dient als klar erkennbarer, erfolgreicher Abschluss der
       # Pipeline in den Workflow-Logs.
