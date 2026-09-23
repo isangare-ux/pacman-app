@@ -44,6 +44,20 @@ jobs:
     runs-on: ubuntu-latest
 
     # ----------------------------------------------------------
+    # MongoDB als Service-Container für den GHCR-Pull-Smoke-Test
+    # (Schritt 6d). Läuft ohne Authentifizierung - die Pacman-Anwendung
+    # baut ihre Verbindungs-Zugangsdaten nur, wenn MONGO_AUTH_USER UND
+    # MONGO_AUTH_PWD gesetzt sind (siehe lib/config.js); beide werden im
+    # Smoke-Test-Schritt bewusst nicht gesetzt. Ohne "container:" für
+    # den Job selbst ist der Service unter localhost:27017 erreichbar.
+    # ----------------------------------------------------------
+    services:
+      mongodb:
+        image: mongo:4.4.30-focal
+        ports:
+          - 27017:27017
+
+    # ----------------------------------------------------------
     # Zentrale Variablen für den Image-Namen und die Version.
     #
     # Dadurch steht "pacman-app" nur an dieser einen Stelle im
@@ -176,6 +190,57 @@ jobs:
           docker inspect \
             --format='{{index .RepoDigests 0}}' \
             $IMAGE_NAME:$RELEASE_TAG
+
+      # --------------------------------------------------
+      # 6d. GHCR-Pull-Smoke-Test
+      #
+      # Startet das soeben aus GHCR gezogene Image (Schritt 6, nicht das
+      # lokal gebaute) mit "--network host", damit der Container sowohl
+      # den MongoDB-Service (localhost:27017) als auch sich selbst ueber
+      # localhost:8080 erreicht. Prueft Startseite und den
+      # datenbankabhaengigen Endpunkt /highscores/list - Nachweis, dass
+      # das tatsaechlich veroeffentlichte Registry-Image funktioniert,
+      # nicht nur der lokale Build-Artefakt.
+      # --------------------------------------------------
+
+      - name: GHCR-Image fuer Smoke-Test starten
+        run: |
+          docker run -d \
+            --name pacman-ghcr-smoke-test \
+            --network host \
+            -e MONGO_SERVICE_HOST=localhost \
+            -e MONGO_DATABASE=pacman \
+            -e MY_MONGO_PORT=27017 \
+            $IMAGE_NAME:$RELEASE_TAG
+
+      - name: Auf Bereitschaft warten
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/ > /dev/null; then
+              echo "OK: Anwendung ist erreichbar."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "FEHLER: Anwendung wurde innerhalb von 30s nicht bereit." >&2
+          docker logs pacman-ghcr-smoke-test
+          exit 1
+
+      - name: GHCR-Smoke-Test ausfuehren
+        run: |
+          echo "--- Startseite ---"
+          curl -sf http://localhost:8080/ > /dev/null
+          echo "OK: HTTP 200 auf /"
+
+          echo "--- Datenbankabhaengiger Endpunkt ---"
+          curl -sf http://localhost:8080/highscores/list > /dev/null
+          echo "OK: HTTP 200 auf /highscores/list"
+
+      - name: GHCR-Smoke-Test-Container aufraeumen
+        if: always()
+        run: |
+          docker logs pacman-ghcr-smoke-test || true
+          docker rm -f pacman-ghcr-smoke-test || true
 
       # --------------------------------------------------
       # 6a. SBOM (CycloneDX) fuer das veroeffentlichte Image erzeugen
