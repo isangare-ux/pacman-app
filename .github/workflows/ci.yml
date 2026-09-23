@@ -121,18 +121,9 @@ jobs:
       # bricht "npm test" mit einem Exit-Code ungleich 0 ab und damit
       # automatisch auch dieser Workflow-Schritt - alle nachfolgenden
       # Schritte (inklusive Docker-Build) werden dann nicht ausgeführt.
-      #
-      # Ausgabe wird zusätzlich in eine Log-Datei gespiegelt (tee), die
-      # am Ende des Workflows als Artefakt hochgeladen wird (Schritt 11).
-      # "set -o pipefail" sorgt dafür, dass ein fehlgeschlagener Test
-      # trotz der Pipe zu "tee" weiterhin diesen Schritt fehlschlagen
-      # lässt.
       # --------------------------------------------------
       - name: Tests ausführen
-        run: |
-          set -o pipefail
-          mkdir -p logs
-          npm test 2>&1 | tee logs/npm-test.log
+        run: npm test
 
       # --------------------------------------------------
       # 5. Docker Compose validieren
@@ -244,43 +235,22 @@ jobs:
 
       - name: Smoke-Test ausführen
         run: |
-          set -o pipefail
-          mkdir -p logs
-          {
-            echo "--- Startseite ---"
-            curl -sf http://localhost:8080/ > /dev/null && echo "OK: HTTP 200 auf /"
+          echo "--- Startseite ---"
+          curl -sf http://localhost:8080/ > /dev/null
+          echo "OK: HTTP 200 auf /"
 
-            echo "--- Datenbankabhängiger Endpunkt ---"
-            curl -sf http://localhost:8080/highscores/list > /dev/null && echo "OK: HTTP 200 auf /highscores/list"
-          } 2>&1 | tee logs/smoke-test.log
+          echo "--- Datenbankabhängiger Endpunkt ---"
+          curl -sf http://localhost:8080/highscores/list > /dev/null
+          echo "OK: HTTP 200 auf /highscores/list"
 
       - name: Smoke-Test-Container aufräumen
         if: always()
         run: |
-          mkdir -p logs
-          docker logs pacman-smoke-test > logs/pacman-container.log 2>&1 || true
+          docker logs pacman-smoke-test || true
           docker rm -f pacman-smoke-test || true
 
       # --------------------------------------------------
-      # 10. Testlogs als Workflow-Artefakt hochladen
-      #
-      # Lädt die Logs aus den Schritten 4 und 9 hoch (auch bei
-      # fehlgeschlagenem Lauf, damit die Ursache nachvollziehbar
-      # bleibt). Enthält ausschließlich npm-/curl-/Container-Ausgaben -
-      # keine Tokens, Kennwörter oder Secret-Werte, da an keiner Stelle
-      # dieses Workflows Zugangsdaten in Logs ausgegeben werden.
-      # --------------------------------------------------
-      - name: Testlogs als Artefakt hochladen
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-logs-${{ github.sha }}
-          path: logs/
-          if-no-files-found: warn
-          retention-days: 14
-
-      # --------------------------------------------------
-      # 11. Abschlussmeldung
+      # 10. Abschlussmeldung
       #
       # Dient als klar erkennbarer, erfolgreicher Abschluss der
       # Pipeline in den Workflow-Logs.
